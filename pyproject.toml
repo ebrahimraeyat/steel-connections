@@ -1,0 +1,27 @@
+[project]
+name = "steel-connections"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "ebrahimraeyat", email = "ebe79442114@yahoo.com" }
+]
+dependencies = [
+    "numpy>=1.24.4",
+    "pandas>=2.0.3",
+    "pytest>=8.3.5",
+]
+readme = "README.md"
+requires-python = ">= 3.8"
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.rye]
+managed = true
+dev-dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+]

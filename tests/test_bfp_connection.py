@@ -98,9 +98,6 @@ def test_net_shear_area_in_tensile():
 	a_nt = bfp.net_shear_area_in_tensile()
 	assert pytest.approx(a_nt, abs=.01) == 9.125
 
-
-
-
 def test_buckling_factor_of_plate():
 	kl_r = bfp.buckling_factor_of_plate()
 	assert pytest.approx(kl_r, abs=.01) == 6.30
@@ -120,8 +117,6 @@ def test_rnv_1():
 def test_anv_web():
 	anv_web = bfp.anv_web()
 	assert pytest.approx(anv_web, abs=.01) == 19.4
-
-
 
 def test_rnv_2():
 	rnv_2 = bfp.rnv_2()
@@ -190,19 +185,30 @@ def test_rnv_6():
 	rnv_6 = bfp.rnv_6()
 	assert pytest.approx(rnv_6, abs=1) == 38265
 
+def test_rnv():
+	rnv = bfp.get_rnv()
+	assert pytest.approx(rnv, abs=1) == 32301
+
 def test_check_max_bolt_diameter():
 	assert bfp.check_max_bolt_diameter()
 
-def test_minimum_grade_of_bolt():
-	assert bfp.minimum_grade_of_bolt()
+def test_check_max_web_bolt_diameter():
+	assert bfp.check_max_web_bolt_diameter()
 
-def test_max_dist_between_column_edge_and_last_bolt():
-	assert bfp.max_dist_between_column_edge_and_last_bolt()
-	assert not bfp.max_dist_between_column_edge_and_last_bolt(tolerance=.1)
-	assert bfp.max_dist_between_column_edge_and_last_bolt(tolerance=.2)
+def test_check_max_buckling_factor_of_plate():
+	assert bfp.check_max_buckling_factor_of_plate()
+
+def test_check_minimum_grade_of_bolt():
+	assert bfp.check_minimum_grade_of_bolt()
+
+def test_check_max_sh():
+	assert bfp.check_max_sh()
+	assert not bfp.check_max_sh(tolerance=.1)
+	assert bfp.check_max_sh(tolerance=.2)
 
 def test_check_minimum_s3():
 	assert bfp.check_minimum_s3()
+	s_g = bfp.bolt_group.s_g
 	bfp.bolt_group.s_g = 18
 	bfp.s3 = bfp._s3()
 	assert not bfp.check_minimum_s3()
@@ -212,18 +218,48 @@ def test_check_minimum_s3():
 	bfp.bolt_group.s_g = 12.8
 	bfp.s3 = bfp._s3()
 	assert bfp.check_minimum_s3()
-
+	bfp.bolt_group.s_g = s_g
+	bfp.s3 = bfp._s3()
+	bfp.s5 = bfp._s5()
 
 def test_check_minimum_s5():
 	assert bfp.check_minimum_s5()
+	s_g = bfp.bolt_group.s_g
 	bfp.bolt_group.s_g = 18
 	bfp.s5 = bfp._s5()
 	assert not bfp.check_minimum_s5()
+	bfp.bolt_group.s_g = s_g
+	bfp.s5 = bfp._s5()
 
 def test_check_beam_weight():
 	assert bfp.check_beam_weight()
 
+def test_check_beam_depth():
+	assert bfp.check_beam_depth()
+
+def test_check_max_beam_flange_thickness():
+	assert bfp.check_max_beam_flange_thickness()
+
+def test_check_minimum_ln_over_beam_depth_intermediate_mf():
+	assert bfp.check_minimum_ln_over_beam_depth_intermediate_mf()
+
+def test_check_minimum_ln_over_beam_depth_special_mf():
+	assert bfp.check_minimum_ln_over_beam_depth_special_mf()
+
+def test_check_max_depth_of_H_and_salibi_column_in_moment_frame_with_slab():
+	assert bfp.check_max_depth_of_H_and_salibi_column_in_moment_frame_with_slab()
+
+def test_check_max_depth_of_H_and_salibi_column_in_moment_frame_without_slab():
+	assert bfp.check_max_depth_of_H_and_salibi_column_in_moment_frame_without_slab()
+
+def test_check_max_depth_width_of_box_and_HBox_column():
+	assert bfp.check_max_depth_width_of_box_and_HBox_column()
+
+def test_check_connection():
+	errors = bfp.check_connection()
+	assert len(errors) == 0
+
 
 
 if __name__ == '__main__':
-	test_check_minimum_s3()
+	test_check_connection()

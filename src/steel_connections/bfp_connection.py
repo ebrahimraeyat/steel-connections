@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 import enum
 
+import numpy as np
+
 from .connections import Connection
 from .member import member
 from .component.bolt import BoltGroup2D
@@ -9,21 +11,21 @@ from .component.plate import Plate
 
 @enum.unique
 class BFPCONNECTIONERROR(enum.IntEnum):
-    max_sh = 1
-    minimum_grade_of_bolt = 2
-    max_bolt_diameter = 3
-    minimum_s3 = 4
-    minimum_s5 = 5
-    beam_weight = 6
-    beam_depth = 7
-    min_beam_flange_thickness = 8
-    max_beam_flange_thickness = 15
-    minimum_ln_over_beam_depth = 9
-    max_depth_of_H_and_salibi_column_in_moment_frame_with_slab = 10
-    max_depth_of_H_and_salibi_column_in_moment_frame_without_slab = 11
-    max_depth_width_of_box_and_HBox_column = 12
-    max_lc_over_radius_of_gyration = 13
-    max_web_bolt_diameter = 14
+    beam_weight = 1
+    beam_depth = 2
+    max_beam_flange_thickness = 3
+    minimum_ln_over_beam_depth_intermediate = 4
+    minimum_ln_over_beam_depth_special = 5
+    max_depth_of_H_and_salibi_column_in_moment_frame_with_slab = 6
+    max_depth_of_H_and_salibi_column_in_moment_frame_without_slab = 7
+    max_depth_width_of_box_and_HBox_column = 8
+    minimum_grade_of_bolt = 9
+    max_bolt_diameter = 10
+    max_web_bolt_diameter = 11
+    max_sh = 12
+    minimum_s3 = 13
+    minimum_s5 = 14
+    check_max_buckling_factor_of_plate = 15
 
 
 @dataclass
@@ -58,20 +60,60 @@ class BFPConnection(Connection):
         self.fu = self.beam.mat.f_u
         self.Ry = self.beam.Ry
         self.Rt = self.beam.Rt
-        self.bolt = self.bolt_group.bolt
-        self.sh = self._sh()
-        self.lh = self._lh()
-        self.kl = self._kl()
-        self.s3 = self._s3()
-        self.s5 = self._s5()
+        if self.bolt_group is not None:
+            self.bolt = self.bolt_group.bolt
+            self.sh = self._sh()
+            self.lh = self._lh()
+            self.kl = self._kl()
+            self.s3 = self._s3()
+            self.s5 = self._s5()
+        else:
+            self.bolt = None
+            self.sh = np.nan
+            self.lh = np.nan
+            self.kl = np.nan
+            self.s3 = np.nan
+            self.s5 = np.nan
+        self.m_p = self._m_p()
+
+
+    def check_beam_weight(self):
+        return self.beam.weight_per_length <= 250
+    
+    def check_beam_depth(self):
+        return self.beam.geom.d <= 100
+    
+    def check_max_beam_flange_thickness(self):
+        return self.beam.geom.t_f <= 3
+
+    def check_minimum_ln_over_beam_depth_intermediate_mf(self):
+        return self.beam_length / self.beam.geom.d >= 7
+    
+    def check_minimum_ln_over_beam_depth_special_mf(self):
+        return self.beam_length / self.beam.geom.d >= 9
+    
+    def check_max_depth_of_H_and_salibi_column_in_moment_frame_with_slab(self):
+        return self.column.geom.d <= 100
+
+    def check_max_depth_of_H_and_salibi_column_in_moment_frame_without_slab(self):
+        return self.column.geom.d <= 40
+
+    def check_max_depth_width_of_box_and_HBox_column(self):
+        return min(self.column.geom.d, self.column.geom.b) <= 75
+
+    def check_minimum_grade_of_bolt(self):
+        return self.bolt.f_uf >= 10000
 
     def check_max_bolt_diameter(self):
         return self.bolt.d_f <= 2.7
-    
-    def minimum_grade_of_bolt(self):
-        return self.bolt.f_uf >= 10000
-    
-    def max_dist_between_column_edge_and_last_bolt(self, tolerance=.5):
+
+    def check_max_web_bolt_diameter(self):
+        return self.bolt_group_web.bolt.d_f <= 2.7
+
+    def check_max_buckling_factor_of_plate(self):
+        return self.buckling_factor_of_plate() <= 25
+
+    def check_max_sh(self, tolerance=.5):
         return self.sh - tolerance <= self.beam.geom.d
     
     def check_minimum_s3(self):
@@ -84,21 +126,25 @@ class BFPConnection(Connection):
             return self.s5 >= 2 * self.bolt.d_f
         return self.s5 >= 1.5 * self.bolt.d_f
     
-    def check_beam_weight(self):
-        return self.beam.weight_per_length <= 250
 
     @property
     def cpr(self):
         return min((self.fy + self.fu) / (2 * self.fy), 1.2)
 
+    def _m_p(self):
+        '''
+        step 1
+        '''
+        m_p = self.beam.geom.Z_x * self.fy
+        return m_p
+    
     @property
     def m_pr(self):
         '''
         step 1
         '''
         cpr = self.cpr
-        mp = self.beam.geom.Z_x * self.fy
-        m_pr = cpr * self.Ry * mp
+        m_pr = cpr * self.Ry * self.m_p
         return m_pr
     
     def get_max_bolt_diameter(self):
@@ -387,6 +433,41 @@ class BFPConnection(Connection):
         vu = self.probable_shear_force_in_column_face(lh, v_gravity)
         return vu <= rnv
 
+    def check_connection(self):
+        errors = []
+        if not self.check_beam_weight():
+            errors.append(BFPCONNECTIONERROR.beam_weight)
+        if not self.check_max_bolt_diameter():
+            errors.append(BFPCONNECTIONERROR.max_bolt_diameter)
+        if not self.check_beam_depth():
+            errors.append(BFPCONNECTIONERROR.beam_depth)
+        if not self.check_max_beam_flange_thickness():
+            errors.append(BFPCONNECTIONERROR.max_beam_flange_thickness)
+        if not self.check_minimum_ln_over_beam_depth_intermediate_mf():
+            errors.append(BFPCONNECTIONERROR.minimum_ln_over_beam_depth_intermediate)
+        if not self.check_minimum_ln_over_beam_depth_special_mf():
+            errors.append(BFPCONNECTIONERROR.minimum_ln_over_beam_depth_special)
+        if not self.check_max_depth_of_H_and_salibi_column_in_moment_frame_with_slab():
+            errors.append(BFPCONNECTIONERROR.max_depth_of_H_and_salibi_column_in_moment_frame_with_slab)
+        if not self.check_max_depth_of_H_and_salibi_column_in_moment_frame_without_slab():
+            errors.append(BFPCONNECTIONERROR.max_depth_of_H_and_salibi_column_in_moment_frame_without_slab)
+        if not self.check_max_depth_width_of_box_and_HBox_column():
+            errors.append(BFPCONNECTIONERROR.max_depth_width_of_box_and_HBox_column)
+        if not self.check_minimum_grade_of_bolt():
+            errors.append(BFPCONNECTIONERROR.minimum_grade_of_bolt)
+        if not self.check_max_bolt_diameter():
+            errors.append(BFPCONNECTIONERROR.max_bolt_diameter)
+        if not self.check_max_web_bolt_diameter():
+            errors.append(BFPCONNECTIONERROR.max_web_bolt_diameter)
+        if not self.check_max_sh():
+            errors.append(BFPCONNECTIONERROR.max_sh)
+        if not self.check_minimum_s3():
+            errors.append(BFPCONNECTIONERROR.minimum_s3)
+        if not self.check_minimum_s5():
+            errors.append(BFPCONNECTIONERROR.minimum_s5)
+        if not self.check_max_buckling_factor_of_plate():
+            errors.append(BFPCONNECTIONERROR.check_max_buckling_factor_of_plate)
+        return errors
 
 
 

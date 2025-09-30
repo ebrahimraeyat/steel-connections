@@ -99,8 +99,8 @@ class SteelMaterial:
 
     @property
     def E(self) -> int:
-        """Modulus of Elasticity, AS4100 Cl 2.2.4"""
-        return 200000
+        """Modulus of Elasticity, kg/m^2"""
+        return 2000000
 
     @property
     def G(self) -> int:

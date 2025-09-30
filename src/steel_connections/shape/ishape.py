@@ -52,7 +52,13 @@ def J(params: dict) -> float:
         - 0.0865*params.t_w * r_1 / params.t_f**2 - 0.0725*params.t_w**2 / params.t_f**2
     J = (2 * params.b * params.t_f**3 + (params.d - 2 * params.t_f) * params.t_w**3)/3 + \
         2 * alpha_1 * D_1**4 - 4 * 0.105*params.t_f**4
-    return J   
+    return J
+
+def h_c(params: dict):
+    h_c = params.d - (params.t_f + params.t)
+    if params.r_1:
+        h_c -= 2 * params.r_1
+    return h_c 
 
 
 

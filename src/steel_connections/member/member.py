@@ -107,6 +107,29 @@ class SteelSection:
         return self.geom.r_y
     
     @property
+    def my_x(self):
+        '''
+        yield moment about the x axis
+        '''
+        return self.mat.f_y * self.geom.S_x
+    
+    @property
+    def my_y(self):
+        '''
+        yield moment about the y axis
+        '''
+        return self.mat.f_y * self.geom.S_y
+    
+    def h_c(self, ws: float=0.8):
+        h_c = self.geom.d - (self.geom.t_f + self.geom.t)
+        if self.geom.r_1:
+            h_c -= 2 * self.geom.r_1
+        else:
+            h_c -= 2 * ws
+
+        return h_c
+    
+    @property
     def Ry(self):
         return 1.15
     

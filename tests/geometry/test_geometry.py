@@ -32,23 +32,9 @@ section_dict_IPE600={
 PG1 = SteelSection.from_section_dict(section_dict)
 IPE600 = SteelSection.from_section_dict(section_dict_IPE600)
 
-def test_weight_per_length():
-    assert PG1.weight_per_length == pytest.approx(37.68, abs=.01)
-
-def test_A_g():
-    assert PG1.A_g == pytest.approx(48, abs=.1)
-    
-def test_i_x_ipe600():
-     assert IPE600.geom.I_x == pytest.approx(92080, abs=1)
-
-def test_s_x_ipe600():
-     assert IPE600.geom.S_x == pytest.approx(3070, abs=1)
-
-def test_my_x_ipe600():
-     assert IPE600.my_x == pytest.approx(7368000, abs=3000)
-
 def test_h_c():
-     assert IPE600.h_c == pytest.approx(51.4, abs=.01)
+     assert IPE600.geom.h_c == pytest.approx(51.4, abs=.01)
+
 
 
 

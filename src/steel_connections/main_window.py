@@ -3,10 +3,14 @@
 import sys
 from datetime import datetime
 from pathlib import Path
+from importlib.resources import files
 
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QSettings, QFile, QTextStream
 from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6 import QtWidgets
 from PySide6.QtUiTools import loadUiType
+
+from steel_connections.gui.toggle_button import Switch
 
 from steel_connections.bfp_connection import BFPConnection
 from steel_connections.member.member import SteelSection
@@ -27,9 +31,16 @@ class MainWindow(Base_Class, UI_Class):
         
         # Setup UI - this makes all widgets available as self.widget_name
         self.setupUi(self)
+        self.add_theme_switch()
         self.fill_thickness()
         self.create_connections()
         self.load_settings()
+
+    def add_theme_switch(self):
+        self.switch = Switch(self.centralwidget, thumb_radius=8, track_radius=6)
+        self.centralwidget.layout().addWidget(self.switch)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Maximum)
+        self.switch.setSizePolicy(sizePolicy)
 
     def fill_thickness(self):
         thicknesses = [str(t) for t in Plate.standard_thickness]
@@ -73,6 +84,8 @@ class MainWindow(Base_Class, UI_Class):
         self.column_tw.currentIndexChanged.connect(self.calculate_connection)
         self.plate_thickness.currentIndexChanged.connect(self.calculate_connection)
         self.bolt_diameter.currentIndexChanged.connect(self.calculate_connection)
+        # theme switch
+        self.switch.toggled.connect(self.change_theme)
 
     def calculate_connection(self):
         try:
@@ -154,6 +167,25 @@ class MainWindow(Base_Class, UI_Class):
         self.results.append(
             f"[{timestamp}] <span style='color: {color};'>ℹ INFO:</span> {message}"
         )
+
+    def change_theme(self):
+        state = self.switch.isChecked()
+        toggle_stylesheet(state)
+
+
+def toggle_stylesheet(state):
+    app = QApplication.instance()
+    if app is None:
+        raise RuntimeError("No Qt Application found.")
+    if state:
+        path = 'darkstyle.qss'
+    else:
+        path = 'light.qss'
+    theme_path = str(files("steel_connections.data.themes").joinpath(path))
+    file = QFile(theme_path)
+    file.open(QFile.ReadOnly | QFile.Text)
+    stream = QTextStream(file)
+    app.setStyleSheet(stream.readAll())
 
 
 def main():

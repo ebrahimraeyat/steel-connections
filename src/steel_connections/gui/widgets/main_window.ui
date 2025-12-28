@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>665</width>
+    <height>471</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Steel Connection</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <layout class="QHBoxLayout" name="horizontalLayout_2">
+      <item>
+       <widget class="QGroupBox" name="groupBox">
+        <property name="title">
+         <string>Beam</string>
+        </property>
+        <layout class="QFormLayout" name="formLayout">
+         <item row="0" column="0">
+          <widget class="QLabel" name="label_2">
+           <property name="text">
+            <string>Bf</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QDoubleSpinBox" name="beam_bf">
+           <property name="suffix">
+            <string> cm</string>
+           </property>
+           <property name="minimum">
+            <double>5.000000000000000</double>
+           </property>
+           <property name="maximum">
+            <double>1000.000000000000000</double>
+           </property>
+           <property name="value">
+            <double>20.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="label_3">
+           <property name="text">
+            <string>Tf</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QComboBox" name="beam_tf"/>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="label_5">
+           <property name="text">
+            <string>D</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QDoubleSpinBox" name="beam_totaldepth">
+           <property name="suffix">
+            <string> cm</string>
+           </property>
+           <property name="minimum">
+            <double>5.000000000000000</double>
+           </property>
+           <property name="maximum">
+            <double>1000.000000000000000</double>
+           </property>
+           <property name="value">
+            <double>30.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="label_4">
+           <property name="text">
+            <string>Tw</string>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QComboBox" name="beam_tw"/>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="groupBox_2">
+        <property name="title">
+         <string>Column</string>
+        </property>
+        <layout class="QFormLayout" name="formLayout_2">
+         <item row="0" column="0">
+          <widget class="QLabel" name="label_6">
+           <property name="text">
+            <string>Bf</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QDoubleSpinBox" name="column_bf">
+           <property name="suffix">
+            <string> cm</string>
+           </property>
+           <property name="minimum">
+            <double>5.000000000000000</double>
+           </property>
+           <property name="maximum">
+            <double>1000.000000000000000</double>
+           </property>
+           <property name="value">
+            <double>20.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="label_7">
+           <property name="text">
+            <string>Tf</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QComboBox" name="column_tf"/>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="label_9">
+           <property name="text">
+            <string>D</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QDoubleSpinBox" name="column_totaldepth">
+           <property name="suffix">
+            <string> cm</string>
+           </property>
+           <property name="minimum">
+            <double>5.000000000000000</double>
+           </property>
+           <property name="maximum">
+            <double>1000.000000000000000</double>
+           </property>
+           <property name="value">
+            <double>30.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="label_8">
+           <property name="text">
+            <string>Tw</string>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QComboBox" name="column_tw"/>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="groupBox_3">
+        <property name="title">
+         <string>Bolt</string>
+        </property>
+        <layout class="QFormLayout" name="formLayout_3">
+         <item row="0" column="0">
+          <widget class="QLabel" name="label_10">
+           <property name="text">
+            <string>Diameter</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QComboBox" name="bolt_diameter">
+           <item>
+            <property name="text">
+             <string>2.4</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>2.7</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>3.0</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QSpinBox" name="bolt_n">
+           <property name="minimum">
+            <number>1</number>
+           </property>
+           <property name="singleStep">
+            <number>2</number>
+           </property>
+           <property name="value">
+            <number>2</number>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="label_14">
+           <property name="text">
+            <string>N</string>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QSpinBox" name="bolt_m">
+           <property name="minimum">
+            <number>1</number>
+           </property>
+           <property name="singleStep">
+            <number>1</number>
+           </property>
+           <property name="value">
+            <number>5</number>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="label_15">
+           <property name="text">
+            <string>M</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="groupBox_4">
+        <property name="title">
+         <string>Plate</string>
+        </property>
+        <layout class="QFormLayout" name="formLayout_4">
+         <item row="0" column="0">
+          <widget class="QLabel" name="label_11">
+           <property name="text">
+            <string>Width</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QDoubleSpinBox" name="plate_width">
+           <property name="suffix">
+            <string> cm</string>
+           </property>
+           <property name="minimum">
+            <double>5.000000000000000</double>
+           </property>
+           <property name="maximum">
+            <double>1000.000000000000000</double>
+           </property>
+           <property name="value">
+            <double>15.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="label_13">
+           <property name="text">
+            <string>Length</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QDoubleSpinBox" name="plate_length">
+           <property name="suffix">
+            <string> cm</string>
+           </property>
+           <property name="minimum">
+            <double>5.000000000000000</double>
+           </property>
+           <property name="maximum">
+            <double>1000.000000000000000</double>
+           </property>
+           <property name="value">
+            <double>30.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="label_12">
+           <property name="text">
+            <string>Thickness</string>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QComboBox" name="plate_thickness"/>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <widget class="QGroupBox" name="groupBox_5">
+      <property name="title">
+       <string>Results</string>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout">
+       <item>
+        <widget class="QTextBrowser" name="results">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>200</height>
+          </size>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>665</width>
+     <height>26</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

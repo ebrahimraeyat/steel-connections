@@ -11,21 +11,36 @@ from .component.plate import Plate
 
 @enum.unique
 class BFPCONNECTIONERROR(enum.IntEnum):
-    beam_weight = 1
-    beam_depth = 2
-    max_beam_flange_thickness = 3
-    minimum_ln_over_beam_depth_intermediate = 4
-    minimum_ln_over_beam_depth_special = 5
-    max_depth_of_H_and_salibi_column_in_moment_frame_with_slab = 6
-    max_depth_of_H_and_salibi_column_in_moment_frame_without_slab = 7
-    max_depth_width_of_box_and_HBox_column = 8
-    minimum_grade_of_bolt = 9
-    max_bolt_diameter = 10
-    max_web_bolt_diameter = 11
-    max_sh = 12
-    minimum_s3 = 13
-    minimum_s5 = 14
-    check_max_buckling_factor_of_plate = 15
+    beam_weight = (1, "Beam weight constraint violation")
+    beam_depth = (2, "Beam depth constraint violation")
+    max_beam_flange_thickness = (3, "Maximum beam flange thickness exceeded")
+    minimum_ln_over_beam_depth_intermediate = (4, "Minimum Ln/beam depth ratio for intermediate moment frames not satisfied")
+    minimum_ln_over_beam_depth_special = (5, "Minimum Ln/beam depth ratio for special moment frames not satisfied")
+    max_depth_of_H_and_salibi_column_in_moment_frame_with_slab = (6, "Maximum depth of H/Salibi column in moment frame with slab exceeded")
+    max_depth_of_H_and_salibi_column_in_moment_frame_without_slab = (7, "Maximum depth of H/Salibi column in moment frame without slab exceeded")
+    max_depth_width_of_box_and_HBox_column = (8, "Maximum depth/width of box/HBox column exceeded")
+    minimum_grade_of_bolt = (9, "Minimum bolt grade requirement not met")
+    max_bolt_diameter = (10, "Maximum bolt diameter exceeded")
+    max_web_bolt_diameter = (11, "Maximum web bolt diameter exceeded")
+    max_sh = (12, "Maximum sh value exceeded")
+    minimum_s3 = (13, "Minimum s3 value not satisfied")
+    minimum_s5 = (14, "Minimum s5 value not satisfied")
+    check_max_buckling_factor_of_plate = (15, "Maximum buckling factor of plate constraint violation")
+    
+    def __new__(cls, value: int, description: str):
+        obj = int.__new__(cls, value)
+        obj._value_ = value
+        obj.description = description
+        return obj
+    
+    def __str__(self):
+        return f"{self.name}: {self.description}"
+    
+    @classmethod
+    def get_description(cls, value: int) -> str:
+        """Get description by value"""
+        return cls(value).description
+
 
 
 @dataclass
@@ -108,6 +123,8 @@ class BFPConnection(Connection):
         return self.bolt.d_f <= 2.7
 
     def check_max_web_bolt_diameter(self):
+        if self.bolt_group_web is None:
+            return True
         return self.bolt_group_web.bolt.d_f <= 2.7
 
     def check_max_buckling_factor_of_plate(self):
@@ -455,8 +472,6 @@ class BFPConnection(Connection):
             errors.append(BFPCONNECTIONERROR.max_depth_width_of_box_and_HBox_column)
         if not self.check_minimum_grade_of_bolt():
             errors.append(BFPCONNECTIONERROR.minimum_grade_of_bolt)
-        if not self.check_max_bolt_diameter():
-            errors.append(BFPCONNECTIONERROR.max_bolt_diameter)
         if not self.check_max_web_bolt_diameter():
             errors.append(BFPCONNECTIONERROR.max_web_bolt_diameter)
         if not self.check_max_sh():

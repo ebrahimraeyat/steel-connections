@@ -103,6 +103,7 @@ class SectionGeometry:
     r_y: float = np.nan
     I_w: float = np.nan
     J: float = np.nan
+    mp: float = np.nan
 
     x_c: float = 0
     y_c: float = 0
@@ -168,8 +169,8 @@ class SectionGeometry:
         return (self.I_x / self.A_g) ** 0.5
 
     def _r_y(self) -> float:
-        return (self.I_y / self.A_g) ** 0.5
-
+        return (self.I_y / self.A_g) ** 0.5   
+    
     @property
     def x_max(self):
         # might not be valid for all sections

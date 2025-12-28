@@ -59,6 +59,7 @@ def h_c(params: dict):
     if params.r_1:
         h_c -= 2 * params.r_1
     return h_c 
+  
 
 
 

@@ -14,7 +14,7 @@ from .component.plate import Plate
 
 
 @dataclass
-class ContinuityPlate():
+class ContinuityPlate(Plate):
     """Bolted Flange Plate Connection
 
     Attributes:
@@ -31,8 +31,11 @@ class ContinuityPlate():
     connection: Connection
     name: str = "Continuity Plate"
     description: str = "Continuity Plate for Steel Connections."
+    e: float= np.inf
+    
 
     def __post_init__(self):
+        super.__init__(self, )
         self.beam = self.connection.beam
         self.column = self.connection.column
 
@@ -176,6 +179,65 @@ class ContinuityPlate():
         f1 = self.get_continuity_plate_force(e, ws)
         t2 = f1 / (0.9 * self.column.f_y * 2 * self.beam.geom.b)
         return max(t1, t2)
+    
+    def ag(self):
+        return self.b_i * self.h_i
+    
+    def ip_ap(self):
+        tw = self.column.geom.tw
+        if self.e <= self.beam.geom.d:
+            column_height = 12 * tw
+        else:
+            column_height = 25 * tw
+        ip = tw * (column_height) ** 3 / 12 + 2 * self.b_i * self.h_i ** 3 / 12
+        ap = tw * column_height + 2 * self.b_i * self.h_i
+
+        return ip, ap, column_height
+    
+    def rp(self):
+        ip, ap, _ = self.ip_ap()
+        return sqrt(ip / ap)
+    
+    def klr(self):
+        '''
+        klr < 25
+        '''
+        kp = 0.75
+        rp = self.rp()
+        l = self.column.h_c()
+        klr = kp * l / rp
+        return klr
+    
+    def tensile_yielding(self):
+        phi = 0.9
+        klr = self.klr()
+        ip, ap = self.ip_ap()
+        if klr <= 25:
+            rn1 = self.f_yi * ap
+        else:
+            print("kl/r > 25, please increase the palte thickness")
+            return None
+        return phi * rn1
+    
+    def tensile_rupture(self):
+        phi = 0.75
+        ap = self.ag()
+        rn1 = self.f_ui * ap
+        return phi * rn1
+    
+    def get_thickness_of_plate_automatically(self):
+        pass
+
+    def check_continuity_plate_is_adequate(self, w: float=0.8):
+        f1 = self.get_continuity_plate_force(w=w)
+        rn1 = self.tensile_yielding()
+        rn2 = self.tensile_rupture()
+        rn = min(rn1, rn2)
+        if rn > f1:
+            return True
+        return False
+
+    
     
     
     

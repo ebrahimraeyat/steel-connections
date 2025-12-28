@@ -111,14 +111,14 @@ class SteelSection:
         '''
         yield moment about the x axis
         '''
-        return self.mat.f_y * self.geom.S_x
+        return self.mat.f_y * self.geom.Z_x
     
     @property
     def my_y(self):
         '''
         yield moment about the y axis
         '''
-        return self.mat.f_y * self.geom.S_y
+        return self.mat.f_y * self.geom.Z_y
     
     def h_c(self, ws: float=0.8):
         h_c = self.geom.d - (self.geom.t_f + self.geom.t)
@@ -136,6 +136,10 @@ class SteelSection:
     @property
     def Rt(self):
         return 1.15
+    
+    @property
+    def mp(self) -> float:
+        return self.geom.Z_x * self.f_y
 
     # ----------------
     # Material Attrs
@@ -152,6 +156,16 @@ class SteelSection:
     @property
     def f_yw(self):
         return self.mat.f_yw
+    
+    @property
+    def cpr(self):
+        return min((self.mat.f_y + self.mat.f_u) / (2 * self.mat.f_y), 1.2)
+    
+    @property
+    def mpr(self):
+        return self.cpr * self.Ry * self.m_p
+    
+
 
     # @property
     # def k_f(self):

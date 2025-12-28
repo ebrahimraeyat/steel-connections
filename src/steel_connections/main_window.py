@@ -133,11 +133,10 @@ class MainWindow(Base_Class, UI_Class):
             )
             errors = connection.check_connection()
             self.results.clear()
-            self.log_info("Connection Results:")
             if len(errors) == 0:
                 self.log_success("The connection is adequate.")
             else:
-                self.log_error("The connection is NOT adequate:")
+                # self.log_error("The connection is NOT adequate:")
                 for error in errors:
                     self.log_warning(f"- {error.description}")
 
@@ -165,7 +164,7 @@ class MainWindow(Base_Class, UI_Class):
     def log_info(self, message, color="#000000"):
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.results.append(
-            f"[{timestamp}] <span style='color: {color};'>ℹ INFO:</span> {message}"
+            f"[{timestamp}] <span style='color: {color}; font-weight: bold; '>ℹ INFO:</span> {message}"
         )
 
     def change_theme(self):

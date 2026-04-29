@@ -1,0 +1,40 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Steel Connections",
+			"type": "shell",
+			"command": "&\"C:\\Users\\ebrahim\\miniconda3\\envs\\osdag-2025\\python.exe\" \"${workspaceFolder}\\src\\steel_connections\\main_window.py\"",
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Run Steel Connections",
+			"type": "shell",
+			"command": "&\"C:\\Users\\ebrahim\\miniconda3\\envs\\osdag-2025\\python.exe\" \"${workspaceFolder}\\src\\steel_connections\\main_window.py\"",
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Run Steel Connections",
+			"type": "shell",
+			"command": "&\"C:\\Users\\ebrahim\\miniconda3\\envs\\osdag-2025\\python.exe\" \"${workspaceFolder}\\src\\steel_connections\\main_window.py\"",
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Run Steel Connections",
+			"type": "shell",
+			"command": "&\"C:\\Users\\ebrahim\\miniconda3\\envs\\osdag-2025\\python.exe\" \"${workspaceFolder}\\src\\steel_connections\\main_window.py\"",
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Run Steel Connections",
+			"type": "shell",
+			"command": "&\"C:\\Users\\ebrahim\\miniconda3\\envs\\osdag-2025\\python.exe\" \"${workspaceFolder}\\src\\steel_connections\\main_window.py\"",
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}

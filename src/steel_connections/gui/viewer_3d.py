@@ -145,3 +145,57 @@ class Viewer3D(QWidget):
         if self._ready:
             self._occ._display.Context.SetDisplayMode(mode, True)
 
+    # ── image capture for reports ─────────────────────────────────────────────
+
+    def capture_views(self, folder: str) -> dict[str, str]:
+        """
+        Capture 4 views (isometric, front, side, top) as PNG images into *folder*.
+        Uses a temporary white background for readability in reports.
+        Returns dict mapping view-name → absolute image path.
+        """
+        import os
+        from OCC.Core.Quantity import Quantity_Color, Quantity_TOC_RGB
+        from OCC.Core.Aspect import Aspect_GFM_VER
+
+        if not self._ready:
+            return {}
+
+        os.makedirs(folder, exist_ok=True)
+        disp = self._occ._display
+        view = disp.View
+
+        # switch to white background for report images
+        white = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB)
+        view.SetBgGradientColors(white, white, Aspect_GFM_VER, True)
+        view.MustBeResized()
+
+        view_defs = [
+            ("iso",   V3d_TypeOfOrientation.V3d_XposYnegZpos),
+            ("front", V3d_TypeOfOrientation.V3d_Xpos),
+            ("side",  V3d_TypeOfOrientation.V3d_Yneg),
+            ("top",   V3d_TypeOfOrientation.V3d_Zpos),
+        ]
+
+        captured: dict[str, str] = {}
+        for name, proj in view_defs:
+            view.SetProj(proj)
+            disp.FitAll()
+            disp.Context.UpdateCurrentViewer()
+            path = os.path.join(folder, f"view_{name}.png")
+            try:
+                view.Dump(path)
+                if os.path.isfile(path) and os.path.getsize(path) > 0:
+                    captured[name] = path
+            except Exception:
+                pass
+
+        # restore dark gradient background
+        top    = Quantity_Color(0.13, 0.16, 0.22, Quantity_TOC_RGB)
+        bottom = Quantity_Color(0.05, 0.06, 0.10, Quantity_TOC_RGB)
+        view.SetBgGradientColors(top, bottom, Aspect_GFM_VER, True)
+        # restore to iso view
+        view.SetProj(V3d_TypeOfOrientation.V3d_XposYnegZpos)
+        disp.FitAll()
+
+        return captured
+

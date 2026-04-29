@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QSplitter, QScrollArea, QGroupBox,
     QLabel, QPushButton, QTextBrowser,
     QDoubleSpinBox, QSpinBox, QComboBox,
-    QSizePolicy, QFrame,
+    QSizePolicy, QFrame, QFileDialog,
 )
 from PyQt5 import QtWidgets
 
@@ -220,6 +220,12 @@ class MainWindow(QMainWindow):
         ]:
             btn = QPushButton(lbl); btn.setFixedHeight(22)
             btn.clicked.connect(slot); bar.addWidget(btn)
+        bar.addStretch()
+        rpt_btn = QPushButton("📄  Export Report")
+        rpt_btn.setFixedHeight(22)
+        rpt_btn.setStyleSheet("font-weight:bold; color:#1F497D;")
+        rpt_btn.clicked.connect(self._export_report)
+        bar.addWidget(rpt_btn)
         vl.addLayout(bar)
 
         self._viewer = Viewer3D(vc)
@@ -341,6 +347,7 @@ class MainWindow(QMainWindow):
     # ── calculation ───────────────────────────────────────────────────────────
 
     def _do_calculate(self):
+        self._last_connection = None  # reset before each run
         try:
             beam = SteelSection.from_section_dict({
                 'sec_type': 'WB',
@@ -370,6 +377,7 @@ class MainWindow(QMainWindow):
                                        s1=7, beam_length=755)
 
             errors = connection.check_connection()
+            self._last_connection = connection  # save for report
             self.results.clear()
             if not errors:
                 self.log_success("Connection is adequate.")
@@ -435,6 +443,41 @@ class MainWindow(QMainWindow):
             failed = ev in err_keys
             self._check_rows[row_key].set_value(
                 "✗  FAIL" if failed else "✓  OK", ok=not failed)
+
+    def _export_report(self):
+        if not getattr(self, '_last_connection', None):
+            QMessageBox.warning(self, "No Connection",
+                                "Run the calculation first before exporting a report.")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Report", "BFP_Connection_Report.docx",
+            "Word Document (*.docx)")
+        if not path:
+            return
+        try:
+            import tempfile, os
+            from steel_connections.report.bfp_report import generate_report
+
+            # capture 3D view images into a temp folder
+            tmp_dir = tempfile.mkdtemp(prefix="bfp_report_views_")
+            view_images: dict = {}
+            try:
+                view_images = self._viewer.capture_views(tmp_dir)
+            except Exception:
+                pass  # views are optional — report still generates without them
+
+            out = generate_report(
+                self._last_connection,
+                project_info={"date": str(__import__('datetime').date.today())},
+                output_path=path,
+                view_images=view_images,
+            )
+            QMessageBox.information(self, "Report Saved",
+                                    f"Report saved to:\n{out}")
+        except Exception as e:
+            import traceback
+            QMessageBox.critical(self, "Report Error",
+                                 f"{e}\n\n{traceback.format_exc()}")
 
     def _sync_inputs(self, adjustments: dict) -> None:
         """Silently update left-panel inputs to match any geometry auto-adjustments.

@@ -5,8 +5,9 @@ from datetime import datetime
 from pathlib import Path
 from importlib.resources import files
 
-from PyQt5.QtCore import QSettings, QFile, QTextStream, Qt, QTimer
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QSettings, QFile, QTextStream, Qt, QTimer
+from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtWidgets import (
     QApplication, QMessageBox, QMainWindow, QWidget,
     QVBoxLayout, QHBoxLayout, QFormLayout,
     QSplitter, QScrollArea, QGroupBox,
@@ -14,13 +15,17 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox, QSpinBox, QComboBox,
     QSizePolicy, QFrame, QFileDialog,
 )
-from PyQt5 import QtWidgets
+from PySide6 import QtWidgets
 
 from steel_connections.gui.toggle_button import Switch
 from steel_connections.gui.viewer_3d import Viewer3D
+from steel_connections.gui.dim_sketch import ISketchWidget, FlangePlateSketchWidget, WebPlateSketchWidget
 from steel_connections.cad.bfp_cad import build_bfp_shapes
+from steel_connections.model_io import save_model, load_model, FILE_FILTER, FILE_EXT
 
-from steel_connections.bfp_connection import BFPConnection
+from steel_connections.connections import DesignCode
+from steel_connections.bfp_connection import BFPConnection, BFPCONNECTIONERROR
+from steel_connections.bfp_connection_aisc358 import AISC358BFPConnection, AISC358BFPERROR
 from steel_connections.member.member import SteelSection
 from steel_connections.component.bolt import Bolt, BoltGroup2D
 from steel_connections.component.plate import Plate
@@ -83,12 +88,48 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Steel Connection Designer — BFP")
         self.resize(1440, 840)
+        self._current_path: str | None = None   # path of the open .scj file
+        self._is_dirty: bool = False             # unsaved changes flag
         self._build_ui()
+        self._build_menu()
         self._fill_thickness()
         self._wire_signals()
         self._load_settings()
-        # populate 3D view on startup (shapes will be queued until OCC is ready)
         QTimer.singleShot(0, self.calculate_connection)
+
+    # ── menu bar ──────────────────────────────────────────────────
+    def _build_menu(self):
+        mb = self.menuBar()
+        fm = mb.addMenu("&File")
+
+        act_new = QAction("&New", self)
+        act_new.setShortcut(QKeySequence.New)
+        act_new.triggered.connect(self._new_model)
+        fm.addAction(act_new)
+
+        act_open = QAction("&Open…", self)
+        act_open.setShortcut(QKeySequence.Open)
+        act_open.triggered.connect(self._open_model)
+        fm.addAction(act_open)
+
+        fm.addSeparator()
+
+        act_save = QAction("&Save", self)
+        act_save.setShortcut(QKeySequence.Save)
+        act_save.triggered.connect(self._save_model)
+        fm.addAction(act_save)
+
+        act_saveas = QAction("Save &As…", self)
+        act_saveas.setShortcut(QKeySequence.SaveAs)
+        act_saveas.triggered.connect(self._save_model_as)
+        fm.addAction(act_saveas)
+
+        fm.addSeparator()
+
+        act_quit = QAction("&Quit", self)
+        act_quit.setShortcut(QKeySequence.Quit)
+        act_quit.triggered.connect(self.close)
+        fm.addAction(act_quit)
 
     # ── layout ───────────────────────────────────────────────────────────────
 
@@ -99,7 +140,7 @@ class MainWindow(QMainWindow):
         root.addWidget(self._build_left_panel())
         root.addWidget(self._build_centre_panel())
         root.addWidget(self._build_right_panel())
-        root.setSizes([270, 880, 290])
+        root.setSizes([320, 840, 280])
         root.setStretchFactor(0, 0)
         root.setStretchFactor(1, 1)
         root.setStretchFactor(2, 0)
@@ -110,7 +151,7 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setMinimumWidth(230); scroll.setMaximumWidth(310)
+        scroll.setMinimumWidth(230); scroll.setMaximumWidth(420)
 
         inner = QWidget()
         lay = QVBoxLayout(inner)
@@ -126,46 +167,49 @@ class MainWindow(QMainWindow):
         lay.addLayout(sw_row)
         lay.addWidget(_hr())
 
+        # Design code selector
+        lay.addWidget(_section_label("Design Code"))
+        dc_box = QGroupBox(); dc_form = QFormLayout(dc_box); dc_form.setContentsMargins(6, 4, 6, 4)
+        self.design_code_combo = QComboBox()
+        for code in DesignCode:
+            self.design_code_combo.addItem(code.value, userData=code)
+        dc_form.addRow("Standard:", self.design_code_combo)
+        lay.addWidget(dc_box)
+        lay.addWidget(_hr())
+
         # Beam
         lay.addWidget(_section_label("Beam"))
-        bb = QGroupBox(); bf = QFormLayout(bb); bf.setContentsMargins(6,4,6,4)
         self.beam_bf          = QDoubleSpinBox(); _setup_spin(self.beam_bf, 5, 100, 20, " cm")
         self.beam_totaldepth  = QDoubleSpinBox(); _setup_spin(self.beam_totaldepth, 5, 150, 30, " cm")
         self.beam_tf = QComboBox(); self.beam_tw = QComboBox()
-        bf.addRow("Bf:", self.beam_bf); bf.addRow("D:", self.beam_totaldepth)
-        bf.addRow("Tf:", self.beam_tf); bf.addRow("Tw:", self.beam_tw)
-        lay.addWidget(bb)
+        lay.addWidget(ISketchWidget(self.beam_bf, self.beam_totaldepth,
+                                    self.beam_tf, self.beam_tw, is_column=False))
 
         # Column
         lay.addWidget(_section_label("Column"))
-        cb = QGroupBox(); cf = QFormLayout(cb); cf.setContentsMargins(6,4,6,4)
         self.column_bf         = QDoubleSpinBox(); _setup_spin(self.column_bf, 5, 100, 20, " cm")
         self.column_totaldepth = QDoubleSpinBox(); _setup_spin(self.column_totaldepth, 5, 150, 30, " cm")
         self.column_tf = QComboBox(); self.column_tw = QComboBox()
-        cf.addRow("Bf:", self.column_bf); cf.addRow("D:", self.column_totaldepth)
-        cf.addRow("Tf:", self.column_tf); cf.addRow("Tw:", self.column_tw)
-        lay.addWidget(cb)
+        lay.addWidget(ISketchWidget(self.column_bf, self.column_totaldepth,
+                                    self.column_tf, self.column_tw, is_column=True))
 
         # Plate
         lay.addWidget(_section_label("Flange Plate"))
-        pb = QGroupBox(); pf = QFormLayout(pb); pf.setContentsMargins(6,4,6,4)
         self.plate_width     = QDoubleSpinBox(); _setup_spin(self.plate_width, 5, 60, 15, " cm")
         self.plate_length    = QDoubleSpinBox(); _setup_spin(self.plate_length, 5, 100, 30, " cm")
         self.plate_thickness = QComboBox()
-        pf.addRow("Width:", self.plate_width); pf.addRow("Length:", self.plate_length)
-        pf.addRow("Thickness:", self.plate_thickness)
-        lay.addWidget(pb)
+        # b = plate_length (long side, horizontal), h = plate_width (short, thickness dir)
+        lay.addWidget(FlangePlateSketchWidget(self.plate_length, self.plate_width,
+                                              self.plate_thickness))
 
         # Web Plate
         lay.addWidget(_section_label("Web Plate"))
-        wpb = QGroupBox(); wpf = QFormLayout(wpb); wpf.setContentsMargins(6,4,6,4)
         self.web_plate_length    = QDoubleSpinBox(); _setup_spin(self.web_plate_length, 1, 100, 25, " cm")
         self.web_plate_height    = QDoubleSpinBox(); _setup_spin(self.web_plate_height, 1, 100, 20, " cm")
         self.web_plate_thickness = QComboBox()
-        wpf.addRow("Length:",    self.web_plate_length)
-        wpf.addRow("Height:",    self.web_plate_height)
-        wpf.addRow("Thickness:", self.web_plate_thickness)
-        lay.addWidget(wpb)
+        # b = web_plate_height (horizontal, across web), h = web_plate_length (vertical)
+        lay.addWidget(WebPlateSketchWidget(self.web_plate_height, self.web_plate_length,
+                                           self.web_plate_thickness))
 
         # Flange Bolts
         lay.addWidget(_section_label("Flange Bolts"))
@@ -312,17 +356,26 @@ class MainWindow(QMainWindow):
         self._debounce.setInterval(250)
         self._debounce.timeout.connect(self._do_calculate)
 
+        def _mark_dirty():
+            self._is_dirty = True
+            self._update_title()
+
         for w in [self.beam_bf, self.beam_totaldepth,
                   self.column_bf, self.column_totaldepth,
                   self.plate_width, self.plate_length,
                   self.web_plate_length, self.web_plate_height]:
             w.valueChanged.connect(self._debounce.start)
+            w.valueChanged.connect(lambda _=None: _mark_dirty())
         for w in [self.bolt_n, self.bolt_m, self.web_bolt_nz, self.web_bolt_nx]:
             w.valueChanged.connect(self._debounce.start)
+            w.valueChanged.connect(lambda _=None: _mark_dirty())
         for w in [self.beam_tf, self.beam_tw, self.column_tf, self.column_tw,
                   self.plate_thickness, self.web_plate_thickness,
                   self.bolt_diameter, self.web_bolt_diameter]:
             w.currentIndexChanged.connect(self._debounce.start)
+            w.currentIndexChanged.connect(lambda _=None: _mark_dirty())
+        self.design_code_combo.currentIndexChanged.connect(self._debounce.start)
+        self.design_code_combo.currentIndexChanged.connect(lambda _=None: _mark_dirty())
         self.switch.toggled.connect(self.change_theme)
 
     def calculate_connection(self):
@@ -332,9 +385,24 @@ class MainWindow(QMainWindow):
     # ── settings ──────────────────────────────────────────────────────────────
 
     def closeEvent(self, event):
+        if self._is_dirty:
+            reply = QMessageBox.question(
+                self, "Unsaved Changes",
+                "You have unsaved changes.\nSave before closing?",
+                QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+            )
+            if reply == QMessageBox.Save:
+                if not self._save_model():     # returns False if user cancelled
+                    event.ignore()
+                    return
+            elif reply == QMessageBox.Cancel:
+                event.ignore()
+                return
         qs = QSettings("steel_connection", "main_window_v2")
         qs.setValue("geometry", self.saveGeometry())
         qs.setValue("state", self.saveState())
+        dc = self.design_code_combo.currentData()
+        qs.setValue("design_code", dc.value if hasattr(dc, "value") else str(dc))
         super().closeEvent(event)
 
     def _load_settings(self):
@@ -343,6 +411,89 @@ class MainWindow(QMainWindow):
         if geom: self.restoreGeometry(geom)
         state = qs.value("state")
         if state: self.restoreState(state)
+        saved_code = qs.value("design_code", DesignCode.IRAN.value)
+        for i in range(self.design_code_combo.count()):
+            item = self.design_code_combo.itemData(i)
+            item_value = item.value if isinstance(item, DesignCode) else item
+            if item_value == saved_code:
+                self.design_code_combo.setCurrentIndex(i)
+                break
+
+    # ── file model actions ────────────────────────────────────────────
+    def _update_title(self):
+        name = Path(self._current_path).name if self._current_path else "Untitled"
+        dirty = " ●" if self._is_dirty else ""
+        code = getattr(self._last_connection, "design_code", "") if getattr(self, "_last_connection", None) else ""
+        code_str = f"  [{code}]" if code else ""
+        self.setWindowTitle(f"Steel Connection Designer — {name}{dirty}{code_str}")
+
+    def _ask_save_if_dirty(self) -> bool:
+        """Return True if it's safe to proceed (saved or discarded)."""
+        if not self._is_dirty:
+            return True
+        reply = QMessageBox.question(
+            self, "Unsaved Changes",
+            "You have unsaved changes. Save now?",
+            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+        )
+        if reply == QMessageBox.Save:
+            return self._save_model()
+        return reply == QMessageBox.Discard
+
+    def _new_model(self):
+        if not self._ask_save_if_dirty():
+            return
+        self._current_path = None
+        self._is_dirty = False
+        self._update_title()
+
+    def _open_model(self):
+        if not self._ask_save_if_dirty():
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open Model", "", FILE_FILTER)
+        if not path:
+            return
+        try:
+            load_model(self, path)
+            self._current_path = path
+            self._is_dirty = False
+            self._update_title()
+            self.calculate_connection()
+            self.log_info(f"Opened: {path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Open Error", str(e))
+
+    def _save_model(self) -> bool:
+        """Save to current path; if none, fall through to Save As. Returns True on success."""
+        if self._current_path:
+            try:
+                save_model(self, self._current_path)
+                self._is_dirty = False
+                self._update_title()
+                self.log_info(f"Saved: {self._current_path}")
+                return True
+            except Exception as e:
+                QMessageBox.critical(self, "Save Error", str(e))
+                return False
+        return self._save_model_as()
+
+    def _save_model_as(self) -> bool:
+        default = (Path(self._current_path).stem if self._current_path else "connection") + FILE_EXT
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Model As", default, FILE_FILTER)
+        if not path:
+            return False
+        try:
+            out = save_model(self, path)
+            self._current_path = str(out)
+            self._is_dirty = False
+            self._update_title()
+            self.log_info(f"Saved: {out}")
+            return True
+        except Exception as e:
+            QMessageBox.critical(self, "Save Error", str(e))
+            return False
 
     # ── calculation ───────────────────────────────────────────────────────────
 
@@ -372,13 +523,21 @@ class MainWindow(QMainWindow):
             plate = Plate(b_i=self.plate_width.value(),
                           h_i=self.plate_length.value(),
                           t_i=float(self.plate_thickness.currentText()))
-            connection = BFPConnection(beam=beam, column=col,
+            selected_code: DesignCode = self.design_code_combo.currentData()
+            ConnectionCls = (
+                AISC358BFPConnection
+                if selected_code == DesignCode.AISC
+                else BFPConnection
+            )
+            connection = ConnectionCls(beam=beam, column=col,
                                        plate=plate, bolt_group=bolt_group,
                                        s1=7, beam_length=755)
 
             errors = connection.check_connection()
             self._last_connection = connection  # save for report
             self.results.clear()
+            self.log_info(f"Design code: <b>{connection.design_code}</b>", color="#aaa")
+            self._update_title()
             if not errors:
                 self.log_success("Connection is adequate.")
             else:
@@ -428,17 +587,31 @@ class MainWindow(QMainWindow):
             self._rr["rn_min"].set_value(_fmt(conn.nominal_shear_force_of_bolt()))
         except: self._rr["rn_min"].set_value("—")
 
-        from steel_connections.bfp_connection import BFPCONNECTIONERROR as ERR
-        check_map = {
-            "beam_weight":  ERR.beam_weight.value,
-            "beam_depth":   ERR.beam_depth.value,
-            "bolt_grade":   ERR.minimum_grade_of_bolt.value,
-            "bolt_diam":    ERR.max_bolt_diameter.value,
-            "plate_buckle": ERR.check_max_buckling_factor_of_plate.value,
-            "sh_check":     ERR.max_sh.value,
-            "s3_check":     ERR.minimum_s3.value,
-            "s5_check":     ERR.minimum_s5.value,
-        }
+        # Build error-value lookup depending on which code was used
+        if isinstance(conn, AISC358BFPConnection):
+            E = AISC358BFPERROR
+            check_map = {
+                "beam_weight":  E.beam_weight.value,
+                "beam_depth":   E.beam_depth.value,
+                "bolt_grade":   E.minimum_bolt_grade.value,
+                "bolt_diam":    E.max_bolt_diameter.value,
+                "plate_buckle": E.plate_buckling.value,
+                "sh_check":     E.max_sh.value,
+                "s3_check":     E.minimum_s3.value,
+                "s5_check":     E.minimum_s5.value,
+            }
+        else:
+            E = BFPCONNECTIONERROR
+            check_map = {
+                "beam_weight":  E.beam_weight.value,
+                "beam_depth":   E.beam_depth.value,
+                "bolt_grade":   E.minimum_grade_of_bolt.value,
+                "bolt_diam":    E.max_bolt_diameter.value,
+                "plate_buckle": E.check_max_buckling_factor_of_plate.value,
+                "sh_check":     E.max_sh.value,
+                "s3_check":     E.minimum_s3.value,
+                "s5_check":     E.minimum_s5.value,
+            }
         for row_key, ev in check_map.items():
             failed = ev in err_keys
             self._check_rows[row_key].set_value(
@@ -472,8 +645,14 @@ class MainWindow(QMainWindow):
                 output_path=path,
                 view_images=view_images,
             )
-            QMessageBox.information(self, "Report Saved",
-                                    f"Report saved to:\n{out}")
+            reply = QMessageBox.question(
+                self, "Report Saved",
+                f"Report saved to:\n{out}\n\nOpen the file now?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply == QMessageBox.Yes:
+                import os
+                os.startfile(str(out))
         except Exception as e:
             import traceback
             QMessageBox.critical(self, "Report Error",
@@ -533,7 +712,7 @@ def main():
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
-    app.exec_()
+    app.exec()
 
 
 if __name__ == "__main__":

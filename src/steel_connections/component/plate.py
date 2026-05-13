@@ -36,7 +36,7 @@ class Plate():
         f_yi (int): Yield strength of the plate material in MPa.
         sig_figs (int): Number of significant figures for rounding calculated values.
     """
-    standard_thickness = [1, 1.2, 1.5, 2, 2.5, 3]
+    standard_thickness = [0.6, 0.8, 1, 1.2, 1.5, 2, 2.5, 3]
     b_i: int = 200
     h_i: int = 200
     t_i: int = 10

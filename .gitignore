@@ -12,3 +12,6 @@ wheels/
 # uv
 un.lock
 
+# AI Prompt
+prompt.md
+

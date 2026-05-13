@@ -1,6 +1,6 @@
-from PyQt5.QtCore import QPropertyAnimation, QRectF, QSize, Qt, pyqtProperty as Property
-from PyQt5.QtGui import QPainter
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QPropertyAnimation, QRectF, QSize, Qt, Property
+from PySide6.QtGui import QPainter
+from PySide6.QtWidgets import (
     QAbstractButton,
     QApplication,
     QHBoxLayout,

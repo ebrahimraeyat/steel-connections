@@ -130,6 +130,33 @@ class BFPConnection(Connection):
     def check_max_buckling_factor_of_plate(self):
         return self.buckling_factor_of_plate() <= 25
 
+    @property
+    def design_code(self) -> str:
+        return "Iranian Code (PN-S 2800 / Instruction 360)"
+
+    @property
+    def code_refs(self) -> dict[str, str]:
+        """بند آیین‌نامه متناظر با هر مرحله محاسبه."""
+        return {
+            "cpr":          "دستورالعمل ۳۶۰، بند ۱۰-۲-۱",
+            "mp":           "دستورالعمل ۳۶۰، بند ۱۰-۲-۱",
+            "mpr":          "دستورالعمل ۳۶۰، رابطه ۱۰-۲-۱",
+            "bolt_diam":    "دستورالعمل ۳۶۰، رابطه ۱۰-۲-۲",
+            "bolt_shear":   "دستورالعمل ۳۶۰، بند ۱۰-۲-۳",
+            "n_bolts":      "دستورالعمل ۳۶۰، بند ۱۰-۲-۴",
+            "sh_lh":        "دستورالعمل ۳۶۰، بند ۱۰-۲-۵",
+            "vh":           "دستورالعمل ۳۶۰، بند ۱۰-۲-۶",
+            "mf":           "دستورالعمل ۳۶۰، رابطه ۱۰-۲-۷",
+            "fpr":          "دستورالعمل ۳۶۰، رابطه ۱۰-۲-۸",
+            "t_min":        "دستورالعمل ۳۶۰، رابطه ۱۰-۲-۹",
+            "rupture":      "دستورالعمل ۳۶۰، رابطه ۱۰-۲-۱۰",
+            "block_shear":  "دستورالعمل ۳۶۰، رابطه ۱۰-۲-۱۱",
+            "buckling":     "دستورالعمل ۳۶۰، رابطه ۱۰-۲-۱۲",
+            "preq_beam":    "دستورالعمل ۳۶۰، جدول ۱۰-۲-۱",
+            "preq_column":  "دستورالعمل ۳۶۰، جدول ۱۰-۲-۱",
+            "preq_bolt":    "دستورالعمل ۳۶۰، بند ۱۰-۲-۲",
+        }
+
     def check_max_sh(self, tolerance=.5):
         return self.sh - tolerance <= self.beam.geom.d
     

@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Steel Connections (venv)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/steel_connections/main_window.py",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src",
+                "PATH": "C:\\Users\\ebrahim\\miniconda3\\envs\\osdag-2025;C:\\Users\\ebrahim\\miniconda3\\envs\\osdag-2025\\Library\\bin;C:\\Users\\ebrahim\\miniconda3\\envs\\osdag-2025\\Library\\mingw-w64\\bin;${env:PATH}"
+            },
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
+    ]
+}

@@ -16,11 +16,11 @@ Init strategy
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
-from PyQt5.QtCore import QTimer
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
+from PySide6.QtCore import QTimer
 
 from OCC.Display import backend as _occ_backend
-_occ_backend.load_backend("pyqt5")
+_occ_backend.load_backend("pyside6")
 
 from OCC.Display.qtDisplay import qtViewer3d
 from OCC.Core.AIS import AIS_Shape

@@ -196,6 +196,7 @@ def generate_report(connection: "BFPConnection",
         section.right_margin  = Cm(2.5)
 
     # ── COVER HEADER ─────────────────────────────────────────────────────────
+    design_code_name = getattr(connection, 'design_code', '—')
     _heading(doc, "Bolted Flange Plate (BFP) Connection — Design Report", level=1)
 
     hdr_rows = [
@@ -203,6 +204,7 @@ def generate_report(connection: "BFPConnection",
         ["Member",   pi.get("member",   "—"), "Checker",  pi.get("checker",  "—")],
         ["Level",    pi.get("level",    "—"), "Firm",     pi.get("firm",     "—")],
         ["Date",     pi.get("date",     str(date.today())), "Page", "1"],
+        ["Design Code", design_code_name, "", ""],
     ]
     tbl = doc.add_table(rows=len(hdr_rows), cols=4)
     tbl.style = "Table Grid"
@@ -328,14 +330,16 @@ def generate_report(connection: "BFPConnection",
     )
 
     # ── 3. DESIGN PROCEDURE ───────────────────────────────────────────────────
+    cr = getattr(connection, 'code_refs', {})
     _heading(doc, "3  Design Procedure", level=2)
     _body(doc,
-        "The BFP connection is designed following a capacity-based approach. "
+        f"The BFP connection is designed following a capacity-based approach per "
+        f"{design_code_name}. "
         "The probable maximum moment at the plastic hinge is used to determine "
         "required plate forces and bolt demands.")
 
     # ── Step 1 ─────────────────────────────────────
-    _heading(doc, "Step 1 — Probable Maximum Moment at Plastic Hinge", level=3)
+    _heading(doc, f"Step 1 — Probable Maximum Moment at Plastic Hinge  [{cr.get('mpr','')  }]", level=3)
 
     cpr = connection.cpr
     mp  = connection.m_p
@@ -345,37 +349,37 @@ def generate_report(connection: "BFPConnection",
     Ry  = beam.Ry
     Zx  = bg.Z_x
 
-    _body(doc, "The strain hardening factor C_pr accounts for strain hardening and local restraint:")
+    _body(doc, f"[{cr.get('cpr','')}]  Strain hardening factor C_pr:")
     _formula_line(doc, "C_pr",
         f"min( (fy + fu) / (2·fy), 1.2 )  =  min( ({_fmt(fy,0)} + {_fmt(fu,0)}) / (2×{_fmt(fy,0)}), 1.2 )",
         _fmt(cpr, 3))
 
-    _body(doc, "Plastic moment of the beam:")
+    _body(doc, f"[{cr.get('mp','')}]  Plastic moment of the beam:")
     _formula_line(doc, "M_p",
         f"Zx × fy  =  {_fmt(Zx)} cm³ × {_fmt(fy,0)} kg/cm²",
         _fmt(mp, 1), "kg·cm")
 
-    _body(doc, "Probable maximum moment at the plastic hinge:")
+    _body(doc, f"[{cr.get('mpr','')}]  Probable maximum moment at the plastic hinge:")
     _formula_line(doc, "M_pr",
         f"C_pr × Ry × M_p  =  {_fmt(cpr)} × {_fmt(Ry)} × {_fmt(mp,1)}",
         _fmt(mpr, 1), "kg·cm")
 
     # ── Step 2 ─────────────────────────────────────
-    _heading(doc, "Step 2 — Maximum Bolt Diameter", level=3)
+    _heading(doc, f"Step 2 — Maximum Bolt Diameter  [{cr.get('bolt_diam','')}]", level=3)
     db_max = connection.get_max_bolt_diameter()
-    _body(doc, "The maximum bolt diameter is limited to avoid net-section failure of the beam flange:")
+    _body(doc, f"[{cr.get('bolt_diam','')}]  Max bolt diameter to avoid net-section failure of beam flange:")
     _formula_line(doc, "d_b,max",
-        f"bf/2 × (1 − Ry·fy/(Rt·fu)) − 0.3",
+        f"bf/2 × (1 − Ry·fy/(Rt·fu)) − offset",
         _fmt(db_max, 3), "cm")
     ok_diam = bolt.d_f <= db_max
     _check_line(doc, "Bolt diameter check",
                 f"df = {_fmt(bolt.d_f)} cm", f"db,max = {_fmt(db_max,3)} cm", ok_diam)
 
     # ── Step 3 ─────────────────────────────────────
-    _heading(doc, "Step 3 — Nominal Shear Force per Bolt", level=3)
+    _heading(doc, f"Step 3 — Nominal Shear Force per Bolt  [{cr.get('bolt_shear','')}]", level=3)
     rn1, rn2, rn3 = connection.nominal_shear_force_of_bolt_values()
     rn = min(rn1, rn2, rn3)
-    _body(doc, "The design shear force per bolt is the minimum of three limit states:")
+    _body(doc, f"[{cr.get('bolt_shear','')}]  Design shear per bolt — minimum of three limit states:")
     _formula_line(doc, "φRn,1 (bolt shear)",
         f"nominal bolt shear capacity",
         _fmt(rn1, 2), "t")
@@ -388,9 +392,9 @@ def generate_report(connection: "BFPConnection",
     _body(doc, f"    →  φRn (governs) = {_fmt(rn, 2)}  kg")
 
     # ── Step 4 ─────────────────────────────────────
-    _heading(doc, "Step 4 — Minimum Number of Bolts per Plate", level=3)
+    _heading(doc, f"Step 4 — Minimum Number of Bolts per Plate  [{cr.get('n_bolts','')}]", level=3)
     n_min = connection.min_no_bolts()
-    _body(doc, "Minimum bolt count required to resist probable moment:")
+    _body(doc, f"[{cr.get('n_bolts','')}]  Minimum bolt count to resist probable moment:")
     _formula_line(doc, "n_min",
         f"1.25 × M_pr / (φ × φRn × (d + tp))",
         str(n_min), "bolts")
@@ -399,12 +403,12 @@ def generate_report(connection: "BFPConnection",
                 f"n_provided = {bg2.n_b}", f"n_min = {n_min}", ok_nb)
 
     # ── Step 5 ─────────────────────────────────────
-    _heading(doc, "Step 5 — Connection Geometry (sh, lh)", level=3)
+    _heading(doc, f"Step 5 — Connection Geometry (sh, lh)  [{cr.get('sh_lh','')}]", level=3)
     sh = connection.sh
     lh = connection.lh
     _body(doc, "Distance from column face to centre of last bolt row:")
     _formula_line(doc, "sh",
-        f"s1 + sp × (np − 1)  =  {_fmt(connection.s1)} + {_fmt(bg2.s_p)} × ({bg2.n_p} − 1)",
+        f"s1 + sp × (np − 1)  =  {_fmt(connection.s1)} + {_fmt(bg2.s_p)} × ({bg2.n_p / 2} − 1)",
         _fmt(sh, 2), "cm")
     _body(doc, "Clear length between plastic hinges:")
     _formula_line(doc, "lh",
@@ -422,29 +426,32 @@ def generate_report(connection: "BFPConnection",
         _fmt(connection.kl, 2), "cm")
 
     # ── Step 6–8 ────────────────────────────────────
-    _heading(doc, "Steps 6–8 — Shear at Hinge, Moment at Column Face, Plate Force", level=3)
+    _heading(doc,
+        f"Steps 6–8 — Shear at Hinge, M_f, F_pr  "
+        f"[{cr.get('vh','')} / {cr.get('mf','')} / {cr.get('fpr','')}]",
+        level=3)
     v_assumed = 0.0
     vh = connection.shear_in_hinge(v_assumed)
     mf = connection.probable_moment_in_column_face(v_assumed)
     fpr = connection.force_of_plate(v_assumed)
 
-    _body(doc, "Shear force at plastic hinge (assuming V_gravity = 0 for moment frame):")
+    _body(doc, f"[{cr.get('vh','')}]  Shear at plastic hinge (V_gravity = 0):")
     _formula_line(doc, "V_h",
         f"2×M_pr / lh + V  =  2×{_fmt(mpr,1)} / {_fmt(lh,2)} + {_fmt(v_assumed,0)}",
         _fmt(vh, 2), "kg")
 
-    _body(doc, "Probable moment at column face:")
+    _body(doc, f"[{cr.get('mf','')}]  Probable moment at column face:")
     _formula_line(doc, "M_f",
         f"M_pr + V_h × sh  =  {_fmt(mpr,1)} + {_fmt(vh,2)} × {_fmt(sh,2)}",
         _fmt(mf, 1), "kg·cm")
 
-    _body(doc, "Required plate force:")
+    _body(doc, f"[{cr.get('fpr','')}]  Required plate force:")
     _formula_line(doc, "F_pr",
         f"M_f / (d + tp)  =  {_fmt(mf,1)} / ({_fmt(bg.d)} + {_fmt(plate.t_i)})",
         _fmt(fpr, 1), "kg")
 
     # ── Step 9 ─────────────────────────────────────
-    _heading(doc, "Step 9 — Required Bolt Count Under F_pr", level=3)
+    _heading(doc, f"Step 9 — Required Bolt Count Under F_pr  [{cr.get('n_bolts','')}]", level=3)
     n9 = connection.check_no_of_bolts(v_assumed)
     _body(doc, "Number of bolts required to resist the actual plate force:")
     _formula_line(doc, "n_req",
@@ -455,9 +462,9 @@ def generate_report(connection: "BFPConnection",
                 f"n = {bg2.n_b}", f"n_req = {n9}", ok_n9)
 
     # ── Step 10 ────────────────────────────────────
-    _heading(doc, "Step 10 — Minimum Plate Thickness", level=3)
+    _heading(doc, f"Step 10 — Minimum Plate Thickness  [{cr.get('t_min','')}]", level=3)
     t_min = connection.get_minimum_thickness_of_plate(v_assumed)
-    _body(doc, "Required plate thickness to resist axial force without yielding:")
+    _body(doc, f"[{cr.get('t_min','')}]  Required plate thickness (yield limit state):")
     _formula_line(doc, "t_min",
         f"F_pr / (φd × Fyp × bp)  =  {_fmt(fpr,1)} / (1.0 × {_fmt(plate.f_yi,0)} × {_fmt(plate.b_i)})",
         _fmt(t_min, 3), "cm")
@@ -466,12 +473,16 @@ def generate_report(connection: "BFPConnection",
                 f"tp = {_fmt(plate.t_i)} cm", f"t_min = {_fmt(t_min,3)} cm", ok_t)
 
     # ── Step 11–12 — Plate rupture / block shear ───
-    _heading(doc, "Steps 11–12 — Plate Tensile Rupture and Block Shear", level=3)
+    _heading(doc,
+        f"Steps 11–12 — Tensile Rupture and Block Shear  "
+        f"[{cr.get('rupture','')} / {cr.get('block_shear','')}]",
+        level=3)
 
     rn_rup  = connection.max_flange_plate_force_according_to_the_limit_state_of_tensile_rupture()
     rn_bs   = connection.flange_plate_force_block_shear()
     phi_n   = 0.9
 
+    _body(doc, f"[{cr.get('rupture','')}]")
     _formula_line(doc, "φRn,rup (tensile rupture)",
         f"Fup × Anp  =  {_fmt(plate.f_ui,0)} × {_fmt(connection.get_net_area_of_plate(),3)}",
         _fmt(rn_rup, 1), "kg")
@@ -481,6 +492,7 @@ def generate_report(connection: "BFPConnection",
                 f"φRn = {_fmt(phi_n*rn_rup,1)} kg", ok_rup,
                 dcr=(fpr/2) / (phi_n * rn_rup) if rn_rup else None)
 
+    _body(doc, f"[{cr.get('block_shear','')}]")
     _formula_line(doc, "φRn,bs (block shear)",
         f"min(0.6·Fup·Anv + Fup·Ant,  0.6·Fyp·Agv + Fup·Ant)",
         _fmt(rn_bs, 1), "kg")
@@ -490,9 +502,10 @@ def generate_report(connection: "BFPConnection",
                 f"φRn,bs = {_fmt(phi_n*rn_bs,1)} kg", ok_bs)
 
     # ── Step 13 — Compression buckling ────────────
-    _heading(doc, "Step 13 — Plate Compression Buckling", level=3)
+    _heading(doc, f"Step 13 — Plate Compression Buckling  [{cr.get('buckling','')}]", level=3)
     kl_r = connection.buckling_factor_of_plate()
     rn_buck = connection.plate_force_compresion_buckling()
+    _body(doc, f"[{cr.get('buckling','')}]")
     _formula_line(doc, "KL/r",
         f"0.65×s1 / rp  =  {_fmt(connection.kl,2)} / {_fmt(plate.r_p,3)}",
         _fmt(kl_r, 2))
@@ -507,44 +520,56 @@ def generate_report(connection: "BFPConnection",
     # ── 4. DESIGN CHECKS SUMMARY ─────────────────────────────────────────────
     _section_break(doc)
     _heading(doc, "4  Design Checks Summary", level=2)
+    _body(doc, f"Design Code: {design_code_name}")
 
     errors = connection.check_connection()
     err_values = {e.value for e in errors}
 
-    from steel_connections.bfp_connection import BFPCONNECTIONERROR as ERR
-    checks = [
-        (ERR.beam_weight,          "Beam weight",                   "≤ 250 kg/m"),
-        (ERR.beam_depth,           "Beam depth",                    "≤ 100 cm"),
-        (ERR.max_bolt_diameter,    "Max bolt diameter",             "≤ 2.7 cm"),
-        (ERR.minimum_grade_of_bolt,"Bolt grade",                    "fuf ≥ 10000 kg/cm²"),
-        (ERR.check_max_buckling_factor_of_plate, "Plate buckling (KL/r)", "≤ 25"),
-        (ERR.max_sh,               "sh ≤ d (beam depth)",           f"sh={_fmt(sh,2)} ≤ d={_fmt(bg.d)} cm"),
-        (ERR.minimum_s3,           "s3 ≥ 1.5–2×df (plate edge)",   f"s3={_fmt(connection.s3,2)} cm"),
-        (ERR.minimum_s5,           "s5 ≥ 1.5–2×df (flange edge)",  f"s5={_fmt(connection.s5,2)} cm"),
-    ]
-    check_rows = []
-    for err_enum, label, criterion in checks:
-        passed = err_enum.value not in err_values
-        check_rows.append([
-            label,
-            criterion,
-            "✓  OK" if passed else "✗  FAIL"
-        ])
+    # Build check table — code-agnostic: use error enum's .description and cr dict
+    from steel_connections.bfp_connection import BFPCONNECTIONERROR
+    from steel_connections.bfp_connection_aisc358 import AISC358BFPConnection, AISC358BFPERROR
 
-    tbl = doc.add_table(rows=1 + len(check_rows), cols=3)
+    if isinstance(connection, AISC358BFPConnection):
+        checks = [
+            (AISC358BFPERROR.beam_weight,   "Beam weight",          "≤ 175 lb/ft (≈260 kg/m)", cr.get('preq_beam','')),
+            (AISC358BFPERROR.beam_depth,    "Beam depth",           "≤ W36 (≈91.4 cm)",         cr.get('preq_beam','')),
+            (AISC358BFPERROR.max_bolt_diameter, "Max bolt diameter",f"≤ {_fmt(db_max,3)} cm",   cr.get('bolt_diam','')),
+            (AISC358BFPERROR.minimum_bolt_grade,"Bolt grade",       "Fu ≥ A325 (120 ksi)",      cr.get('preq_bolt','')),
+            (AISC358BFPERROR.plate_buckling,"Plate buckling (KL/r)","≤ 25",                     cr.get('buckling','')),
+            (AISC358BFPERROR.max_sh,        "sh ≤ d",               f"sh={_fmt(sh,2)} cm",       cr.get('sh_lh','')),
+            (AISC358BFPERROR.minimum_s3,    "s3 (plate edge)",      f"≥ 1.5–2×df",              cr.get('sh_lh','')),
+            (AISC358BFPERROR.minimum_s5,    "s5 (flange edge)",     f"≥ 1.5–2×df",              cr.get('sh_lh','')),
+        ]
+    else:
+        checks = [
+            (BFPCONNECTIONERROR.beam_weight,   "Beam weight",           "≤ 250 kg/m",                cr.get('preq_beam','')),
+            (BFPCONNECTIONERROR.beam_depth,    "Beam depth",            "≤ 100 cm",                  cr.get('preq_beam','')),
+            (BFPCONNECTIONERROR.max_bolt_diameter,"Max bolt diameter",  "≤ 2.7 cm",                  cr.get('bolt_diam','')),
+            (BFPCONNECTIONERROR.minimum_grade_of_bolt,"Bolt grade",     "fuf ≥ 10000 kg/cm²",        cr.get('preq_bolt','')),
+            (BFPCONNECTIONERROR.check_max_buckling_factor_of_plate,"Plate buckling (KL/r)","≤ 25",  cr.get('buckling','')),
+            (BFPCONNECTIONERROR.max_sh,        "sh ≤ d",                f"sh={_fmt(sh,2)} cm",        cr.get('sh_lh','')),
+            (BFPCONNECTIONERROR.minimum_s3,    "s3 (plate edge)",       f"≥ 1.5–2×df",               cr.get('sh_lh','')),
+            (BFPCONNECTIONERROR.minimum_s5,    "s5 (flange edge)",      f"≥ 1.5–2×df",               cr.get('sh_lh','')),
+        ]
+
+    check_rows = []
+    for err_enum, label, criterion, ref in checks:
+        passed = err_enum.value not in err_values
+        check_rows.append([label, criterion, ref, "✓  OK" if passed else "✗  FAIL"])
+
+    tbl = doc.add_table(rows=1 + len(check_rows), cols=4)
     tbl.style = "Table Grid"
     tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
-    _header_row(tbl, ["Check", "Criterion", "Result"])
+    _header_row(tbl, ["Check", "Criterion", "Code Reference", "Result"])
     for r_i, row_data in enumerate(check_rows):
         row = tbl.rows[r_i + 1]
-        col_widths = [None, None, None]
         for c_i, val in enumerate(row_data):
             cell = row.cells[c_i]
             p = cell.paragraphs[0]
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             run = p.add_run(val)
             run.font.size = Pt(9)
-            if c_i == 2:
+            if c_i == 3:   # Result column
                 ok = "OK" in val
                 run.font.color.rgb = _OK if ok else _FAIL
                 run.bold = True
@@ -554,12 +579,13 @@ def generate_report(connection: "BFPConnection",
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     if not errors:
-        run = p.add_run("✓  Connection is ADEQUATE — all checks passed.")
+        run = p.add_run(f"✓  Connection is ADEQUATE — all checks passed per {design_code_name}.")
         run.bold = True
         run.font.size = Pt(12)
         run.font.color.rgb = _OK
     else:
-        run = p.add_run(f"✗  Connection has {len(errors)} FAILED check(s) — see table above.")
+        run = p.add_run(
+            f"✗  Connection has {len(errors)} FAILED check(s) per {design_code_name} — see table above.")
         run.bold = True
         run.font.size = Pt(12)
         run.font.color.rgb = _FAIL

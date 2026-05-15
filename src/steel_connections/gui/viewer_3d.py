@@ -27,6 +27,7 @@ from OCC.Core.AIS import AIS_Shape
 from OCC.Core.Quantity import Quantity_Color, Quantity_TOC_RGB
 from OCC.Core.V3d import V3d_TypeOfOrientation
 from OCC.Core.Aspect import Aspect_GFM_VER
+from OCC.Core.Graphic3d import Graphic3d_Camera
 
 
 class Viewer3D(QWidget):
@@ -39,6 +40,11 @@ class Viewer3D(QWidget):
         self._ready    = False
         self._need_fit = True
         self._queued: list[AIS_Shape] | None = None
+        self._displayed_shapes: list[AIS_Shape] = []
+        self._display_mode = 1
+        self._projection_mode = "orthographic"
+        self._visual_style = "shaded"
+        self._shadows_enabled = False
 
         self._occ = qtViewer3d(self)
         self._occ.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -74,6 +80,7 @@ class Viewer3D(QWidget):
         bottom = Quantity_Color(0.05, 0.06, 0.10, Quantity_TOC_RGB)   # near-black
         disp.View.SetBgGradientColors(top, bottom, Aspect_GFM_VER, True)
         disp.View.SetProj(V3d_TypeOfOrientation.V3d_XposYnegZpos)  # isometric default
+        self._apply_projection_mode()
         disp.View.MustBeResized()
         try:
             disp.DisableAntiAliasing()   # faster redraws (Osdag pattern)
@@ -83,6 +90,8 @@ class Viewer3D(QWidget):
             disp.display_triedron()   # show X/Y/Z axis indicator in corner
         except Exception:
             pass
+        self._apply_visual_style()
+        self._apply_shadow_mode()
 
         if self._queued is not None:
             shapes, self._queued = self._queued, None
@@ -104,9 +113,10 @@ class Viewer3D(QWidget):
         disp = self._occ._display
         ctx  = disp.Context
         ctx.RemoveAll(False)
+        self._displayed_shapes = list(shapes)
         for ais in shapes:
-            ais.SetDisplayMode(1)
             ctx.Display(ais, False)
+        self._apply_visual_style(update=False)
         ctx.UpdateCurrentViewer()
         if fit:
             disp.View.MustBeResized()
@@ -118,32 +128,220 @@ class Viewer3D(QWidget):
         if self._ready:
             self._occ._display.FitAll()
 
+    def _apply_projection_mode(self) -> None:
+        if not self._ready:
+            return
+        try:
+            cam = self._occ._display.View.Camera()
+            if self._projection_mode == "perspective":
+                cam.SetProjectionType(Graphic3d_Camera.Projection_Perspective)
+            else:
+                cam.SetProjectionType(Graphic3d_Camera.Projection_Orthographic)
+            self._occ._display.View.SetCamera(cam)
+            self._occ._display.View.MustBeResized()
+        except Exception:
+            pass
+
+    def set_projection_isometric(self) -> None:
+        self._projection_mode = "orthographic"
+        if self._ready:
+            self._apply_projection_mode()
+            self.fit_all()
+
+    def set_projection_perspective(self) -> None:
+        self._projection_mode = "perspective"
+        if self._ready:
+            self._apply_projection_mode()
+            self.fit_all()
+
     def set_view_iso(self) -> None:
         if self._ready:
             self._occ._display.View.SetProj(V3d_TypeOfOrientation.V3d_XposYnegZpos)
+            self._apply_projection_mode()
             self.fit_all()
 
     def set_view_front(self) -> None:
         """Look from +X toward -X → sees beam end cross-section (روبرو)."""
         if self._ready:
             self._occ._display.View.SetProj(V3d_TypeOfOrientation.V3d_Xpos)
+            self._apply_projection_mode()
             self.fit_all()
 
     def set_view_side(self) -> None:
         """Look from -Y → XZ plane → beam web visible (بغل)."""
         if self._ready:
             self._occ._display.View.SetProj(V3d_TypeOfOrientation.V3d_Yneg)
+            self._apply_projection_mode()
             self.fit_all()
 
     def set_view_top(self) -> None:
         """Look from +Z → XY plane → top flange visible (بالا)."""
         if self._ready:
             self._occ._display.View.SetProj(V3d_TypeOfOrientation.V3d_Zpos)
+            self._apply_projection_mode()
             self.fit_all()
 
+    def set_display_mode_shaded(self) -> None:
+        self.set_visual_style("shaded")
+
+    def set_display_mode_wireframe(self) -> None:
+        self.set_visual_style("wireframe")
+
+    def set_visual_style(self, style: str) -> None:
+        self._visual_style = style or "shaded"
+        if not self._ready:
+            return
+        self._apply_visual_style()
+
+    def set_shadows_enabled(self, enabled: bool) -> None:
+        self._shadows_enabled = bool(enabled)
+        if not self._ready:
+            return
+        self._apply_shadow_mode()
+
+    def _apply_shadow_mode(self) -> None:
+        if not self._ready:
+            return
+
+        disp = self._occ._display
+        view = disp.View
+        applied = False
+
+        try:
+            params = view.ChangeRenderingParams()
+
+            if hasattr(params, "IsShadowEnabled"):
+                params.IsShadowEnabled = self._shadows_enabled
+                applied = True
+
+            if hasattr(params, "NbMsaaSamples"):
+                params.NbMsaaSamples = 8 if self._shadows_enabled else 0
+
+            if hasattr(params, "RenderResolutionScale"):
+                params.RenderResolutionScale = 1.0
+
+            if self._shadows_enabled:
+                for attr_name in ("Method", "RenderingMethod"):
+                    if hasattr(params, attr_name):
+                        try:
+                            import OCC.Core.Graphic3d as _g3d
+                            if hasattr(_g3d, "Graphic3d_RM_RAYTRACING"):
+                                setattr(params, attr_name, getattr(_g3d, "Graphic3d_RM_RAYTRACING"))
+                                applied = True
+                            elif hasattr(_g3d, "Graphic3d_RM_RASTERIZATION"):
+                                setattr(params, attr_name, getattr(_g3d, "Graphic3d_RM_RASTERIZATION"))
+                        except Exception:
+                            pass
+            else:
+                for attr_name in ("Method", "RenderingMethod"):
+                    if hasattr(params, attr_name):
+                        try:
+                            import OCC.Core.Graphic3d as _g3d
+                            if hasattr(_g3d, "Graphic3d_RM_RASTERIZATION"):
+                                setattr(params, attr_name, getattr(_g3d, "Graphic3d_RM_RASTERIZATION"))
+                                applied = True
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+        if not applied:
+            for method_name in ("SetRaytracingMode", "EnableRaytracing", "SetShadowEnabled"):
+                method = getattr(view, method_name, None)
+                if callable(method):
+                    try:
+                        method(self._shadows_enabled)
+                        applied = True
+                        break
+                    except TypeError:
+                        try:
+                            method(1 if self._shadows_enabled else 0)
+                            applied = True
+                            break
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass
+
+        try:
+            view.MustBeResized()
+        except Exception:
+            pass
+        try:
+            disp.Context.UpdateCurrentViewer()
+        except Exception:
+            pass
+
+    def _apply_visual_style(self, update: bool = True) -> None:
+        if not self._ready:
+            return
+
+        disp = self._occ._display
+        ctx = disp.Context
+        style = self._visual_style
+
+        if style == "hidden_line":
+            try:
+                disp.SetModeHLR()
+            except Exception:
+                try:
+                    disp.View.SetComputedMode(True)
+                except Exception:
+                    pass
+            ctx.UpdateCurrentViewer()
+            return
+
+        try:
+            disp.SetModeShaded()
+        except Exception:
+            try:
+                disp.View.SetComputedMode(False)
+            except Exception:
+                pass
+
+        mode = 0 if style == "wireframe" else 1
+        show_edges = style in {"shaded_edges", "xray_edges"}
+        transparency = 0.60 if style in {"xray", "xray_edges"} else 0.0
+        self._display_mode = mode
+
+        if mode == 0:
+            try:
+                disp.SetModeWireFrame()
+            except Exception:
+                pass
+
+        for ais in self._displayed_shapes:
+            try:
+                drawer = ais.Attributes()
+                if drawer is not None:
+                    drawer.SetFaceBoundaryDraw(show_edges)
+            except Exception:
+                pass
+
+            try:
+                ctx.SetDisplayMode(ais, mode, False)
+            except Exception:
+                try:
+                    ais.SetDisplayMode(mode)
+                except Exception:
+                    pass
+
+            try:
+                ais.SetTransparency(transparency)
+            except Exception:
+                pass
+
+            if update:
+                try:
+                    ctx.Redisplay(ais, False)
+                except Exception:
+                    pass
+
+        if update:
+            ctx.UpdateCurrentViewer()
+
     def set_display_mode(self, mode: int = 1) -> None:
-        if self._ready:
-            self._occ._display.Context.SetDisplayMode(mode, True)
+        self.set_visual_style("wireframe" if mode == 0 else "shaded")
 
     # ── image capture for reports ─────────────────────────────────────────────
 

@@ -1,0 +1,20 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^\\.\\\\\\.venv\\\\Scripts\\\\python\\.exe -c \"import ast; ast\\.parse\\(open\\('src/steel_connections/main_window\\.py', encoding='utf-8'\\)\\.read\\(\\)\\); print\\('OK'\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^Get-Content src/steel_connections/main_window\\.py \\| awk '\\{print NR \":\" \\$0\\}' \\| grep -A 30 \"def _export_report\\(self\\):\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^\\.\\\\\\.venv\\\\Scripts\\\\python\\.exe src/steel_connections/main_window\\.py$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^\\.\\\\\\.venv\\\\Scripts\\\\python\\.exe -c \"from steel_connections\\.member\\.member import SteelSection; from steel_connections\\.component\\.bolt import Bolt, BoltGroup2D; from steel_connections\\.component\\.plate import Plate; from steel_connections\\.bfp_connection import BFPConnection; from steel_connections\\.cad\\.bfp_cad import build_bfp_shapes; beam=SteelSection\\.from_section_dict\\(\\{'sec_type':'WB','b':20,'d':30,'t_w':1\\.0,'t_f':1\\.5,'t':1\\.5,'f_y':2400,'f_yw':2400,'f_u':3700\\}\\); col=SteelSection\\.from_section_dict\\(\\{'sec_type':'WC','b':25,'d':35,'t_w':1\\.2,'t_f':1\\.8,'t':1\\.8,'f_y':2400,'f_yw':2400,'f_u':3700\\}\\); bg=BoltGroup2D\\(n_p=2,n_g=5,bolt=Bolt\\(d_f=2\\.4\\),s_p=8\\.4,s_g=5\\); plate=Plate\\(b_i=15,h_i=30,t_i=2\\); wbg=BoltGroup2D\\(n_p=3,n_g=2,bolt=Bolt\\(d_f=2\\.0\\),s_p=8\\.4,s_g=5\\); wp=Plate\\(b_i=20,h_i=25,t_i=1\\.5\\); conn=BFPConnection\\(beam=beam,column=col,plate=plate,bolt_group=bg,bolt_group_web=wbg,web_plate=wp,s1=7,beam_length=755\\); shapes,warns,adj=build_bfp_shapes\\(conn,wp_length=25,wp_height=20,wp_thickness=1\\.5,wb_diam=2\\.0,wb_nz=3,wb_nx=2\\); print\\('OK', len\\(shapes\\.all_shapes\\(\\)\\), len\\(shapes\\.welds\\)\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

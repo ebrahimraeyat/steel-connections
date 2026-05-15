@@ -4,7 +4,7 @@ import enum
 
 class DesignCode(enum.StrEnum):
     """Supported design code standards for BFP connection checks."""
-    IRAN = "Iranian Code (PN-S 2800 / Instruction 360)"
+    MABHAS10 = "مبحث دهم مقررات ملی ایران (ویرایش ۱۴۰۱) / AISC 360"
     AISC = "AISC 358-16 (USA)"
 
 

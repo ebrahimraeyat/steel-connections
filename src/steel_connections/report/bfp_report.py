@@ -24,6 +24,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+from lxml import etree
 
 if TYPE_CHECKING:
     from steel_connections.bfp_connection import BFPConnection
@@ -163,6 +164,62 @@ def _fmt(v, digits: int = 3) -> str:
 
 def _section_break(doc: Document) -> None:
     doc.add_paragraph()
+
+
+def _criterion_text(connection, err_enum, db_max: float, sh: float) -> str:
+    from steel_connections.bfp_connection import BFPCONNECTIONERROR
+    from steel_connections.bfp_connection_aisc358 import AISC358BFPConnection, AISC358BFPERROR
+
+    if isinstance(connection, AISC358BFPConnection):
+        mapping = {
+            AISC358BFPERROR.beam_weight: "≤ 175 lb/ft (≈260 kg/m)",
+            AISC358BFPERROR.beam_depth: "≤ W36 (≈91.4 cm)",
+            AISC358BFPERROR.max_beam_flange_thickness: "≤ 1-1/8 in (≈2.86 cm)",
+            AISC358BFPERROR.min_ln_over_d_imf: "Ln/d ≥ 7",
+            AISC358BFPERROR.min_ln_over_d_smf: "Ln/d ≥ 7",
+            AISC358BFPERROR.max_column_depth: "≤ W36 (≈91.4 cm)",
+            AISC358BFPERROR.max_box_column_dim: "≤ 16 in (≈40.6 cm)",
+            AISC358BFPERROR.minimum_bolt_grade: "Fu ≥ A325 (120 ksi)",
+            AISC358BFPERROR.max_bolt_diameter: f"≤ {_fmt(db_max,3)} cm",
+            AISC358BFPERROR.max_web_bolt_diameter: "≤ 1 in (2.54 cm)",
+            AISC358BFPERROR.max_sh: f"sh ≤ d, sh={_fmt(sh,2)} cm",
+            AISC358BFPERROR.minimum_s3: "≥ 1.5–2×df",
+            AISC358BFPERROR.minimum_s5: "≥ 1.5–2×df",
+            AISC358BFPERROR.plate_buckling: "KL/r ≤ 25",
+        }
+        return mapping.get(err_enum, "—")
+
+    mapping = {
+        BFPCONNECTIONERROR.beam_weight: "≤ 250 kg/m",
+        BFPCONNECTIONERROR.beam_depth: "≤ 100 cm",
+        BFPCONNECTIONERROR.max_beam_flange_thickness: "≤ 3 cm",
+        BFPCONNECTIONERROR.minimum_ln_over_beam_depth_intermediate: "Ln/d ≥ 7",
+        BFPCONNECTIONERROR.minimum_ln_over_beam_depth_special: "Ln/d ≥ 9",
+        BFPCONNECTIONERROR.max_depth_of_H_and_salibi_column_in_moment_frame_with_slab: "≤ 100 cm",
+        BFPCONNECTIONERROR.max_depth_of_H_and_salibi_column_in_moment_frame_without_slab: "≤ 40 cm",
+        BFPCONNECTIONERROR.max_depth_width_of_box_and_HBox_column: "≤ 75 cm",
+        BFPCONNECTIONERROR.minimum_grade_of_bolt: "fuf ≥ 10000 kg/cm²",
+        BFPCONNECTIONERROR.max_bolt_diameter: f"≤ {_fmt(db_max,3)} cm",
+        BFPCONNECTIONERROR.max_web_bolt_diameter: "≤ 2.7 cm",
+        BFPCONNECTIONERROR.max_sh: f"sh ≤ d, sh={_fmt(sh,2)} cm",
+        BFPCONNECTIONERROR.minimum_s3: "≥ 1.5–2×df",
+        BFPCONNECTIONERROR.minimum_s5: "≥ 1.5–2×df",
+        BFPCONNECTIONERROR.check_max_buckling_factor_of_plate: "KL/r ≤ 25",
+    }
+    return mapping.get(err_enum, "—")
+
+
+def _precheck_reference(connection, err_enum, cr: dict[str, str]) -> str:
+    name = getattr(err_enum, "name", "")
+    if any(key in name for key in ["beam", "ln_over", "column"]):
+        return cr.get("preq_beam", "") if "column" not in name else cr.get("preq_column", "")
+    if "bolt" in name:
+        return cr.get("preq_bolt", "")
+    if any(key in name for key in ["sh", "s3", "s5"]):
+        return cr.get("sh_lh", "")
+    if "buckling" in name:
+        return cr.get("buckling", "")
+    return ""
 
 
 # ── Main report function ──────────────────────────────────────────────────────
@@ -329,9 +386,51 @@ def generate_report(connection: "BFPConnection",
         ]
     )
 
-    # ── 3. DESIGN PROCEDURE ───────────────────────────────────────────────────
     cr = getattr(connection, 'code_refs', {})
-    _heading(doc, "3  Design Procedure", level=2)
+    errors = connection.check_connection()
+    err_values = {e.value for e in errors}
+
+    # ── 3. PREQUALIFICATION / CHECK_CONNECTION CHECKS ───────────────────────
+    _heading(doc, "3  Prequalification / Initial Checks", level=2)
+    _body(doc, f"The following checks are reported first based on the `check_connection()` method for {design_code_name}.")
+
+    precheck_rows = []
+    for err_enum in type(errors[0]).__members__.values() if errors else []:
+        pass
+
+    # preserve declared enum order explicitly
+    from steel_connections.bfp_connection import BFPCONNECTIONERROR
+    from steel_connections.bfp_connection_aisc358 import AISC358BFPConnection, AISC358BFPERROR
+    precheck_enums = list(AISC358BFPERROR) if isinstance(connection, AISC358BFPConnection) else list(BFPCONNECTIONERROR)
+    for err_enum in precheck_enums:
+        passed = err_enum.value not in err_values
+        precheck_rows.append([
+            err_enum.description,
+            _criterion_text(connection, err_enum, connection.get_max_bolt_diameter(), connection.sh),
+            _precheck_reference(connection, err_enum, cr),
+            "✓  OK" if passed else "✗  FAIL",
+        ])
+
+    tbl = doc.add_table(rows=1 + len(precheck_rows), cols=4)
+    tbl.style = "Table Grid"
+    tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    _header_row(tbl, ["Check", "Criterion", "Code Reference", "Result"])
+    for r_i, row_data in enumerate(precheck_rows):
+        row = tbl.rows[r_i + 1]
+        for c_i, val in enumerate(row_data):
+            cell = row.cells[c_i]
+            p = cell.paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = p.add_run(str(val))
+            run.font.size = Pt(9)
+            if c_i == 3:
+                ok = "OK" in str(val)
+                run.font.color.rgb = _OK if ok else _FAIL
+                run.bold = True
+    doc.add_paragraph()
+
+    # ── 4. DESIGN PROCEDURE ───────────────────────────────────────────────────
+    _heading(doc, "4  Design Procedure", level=2)
     _body(doc,
         f"The BFP connection is designed following a capacity-based approach per "
         f"{design_code_name}. "
@@ -517,24 +616,56 @@ def generate_report(connection: "BFPConnection",
             f"Fyp × Ap  =  {_fmt(plate.f_yi,0)} × {_fmt(plate.A_p,3)}",
             _fmt(rn_buck, 1), "kg")
 
-    # ── 4. DESIGN CHECKS SUMMARY ─────────────────────────────────────────────
+    # ── Step 14 — Probable Shear at Column Face ────────────────────────────
+    _heading(doc, "Step 14 — Probable Shear Force at Column Face", level=3)
+    v_gravity = 0.0
+    vu = connection.probable_shear_force_in_column_face(v_assumed, v_gravity)
+    _body(doc, "Probable shear force transferred to the column face / shear-tab region:")
+    _formula_line(doc, "V_u",
+        f"V_h + V_gravity  =  {_fmt(vh,2)} + {_fmt(v_gravity,2)}",
+        _fmt(vu, 2), "kg")
+
+    # ── Step 15 — Web Plate / Shear Connection ─────────────────────────────
+    _heading(doc, "Step 15 — Web Plate / Shear Connection Check", level=3)
+    if connection.bolt_group_web is not None and connection.web_plate is not None:
+        rnv_1 = connection.rnv_1() * connection.bolt_group_web.n_b
+        rnv_2 = connection.rnv_2()
+        rnv_3 = connection.rnv_3()
+        rnv_4 = connection.rnv_4() * connection.bolt_group_web.n_b
+        rnv_5 = connection.rnv_5() * connection.bolt_group_web.n_b
+        rnv_6 = connection.rnv_6()
+        rnv = connection.get_rnv()
+        _body(doc, "Available web connection shear strength is the minimum of the web-bolt/web-plate limit states:")
+        _formula_line(doc, "φRnv,1", "Bolt shear", _fmt(rnv_1, 2), "kg")
+        _formula_line(doc, "φRnv,2", "Web plate net shear rupture", _fmt(rnv_2, 2), "kg")
+        _formula_line(doc, "φRnv,3", "Web plate gross shear yielding", _fmt(rnv_3, 2), "kg")
+        _formula_line(doc, "φRnv,4", "Web plate bearing", _fmt(rnv_4, 2), "kg")
+        _formula_line(doc, "φRnv,5", "Beam web bearing", _fmt(rnv_5, 2), "kg")
+        _formula_line(doc, "φRnv,6", "Web plate block shear", _fmt(rnv_6, 2), "kg")
+        _formula_line(doc, "φRnv", "min(φRnv,1 … φRnv,6)", _fmt(rnv, 2), "kg")
+        ok_web = connection.check_web_plate_connection(v_assumed, v_gravity)
+        _check_line(doc, "Web shear connection", _fmt(vu, 2), _fmt(rnv, 2), ok_web,
+                    dcr=(vu / rnv) if rnv else None)
+    else:
+        _body(doc, "Web plate / shear connection data is not available, so Step 15 is omitted.")
+
+    # ── 5. DESIGN CHECKS SUMMARY ─────────────────────────────────────────────
     _section_break(doc)
-    _heading(doc, "4  Design Checks Summary", level=2)
+    _heading(doc, "5  Design Checks Summary", level=2)
     _body(doc, f"Design Code: {design_code_name}")
-
-    errors = connection.check_connection()
-    err_values = {e.value for e in errors}
-
-    # Build check table — code-agnostic: use error enum's .description and cr dict
-    from steel_connections.bfp_connection import BFPCONNECTIONERROR
-    from steel_connections.bfp_connection_aisc358 import AISC358BFPConnection, AISC358BFPERROR
 
     if isinstance(connection, AISC358BFPConnection):
         checks = [
+            (AISC358BFPERROR.max_beam_flange_thickness, "Beam flange thickness", "≤ 1-1/8 in (≈2.86 cm)", cr.get('preq_beam','')),
+            (AISC358BFPERROR.min_ln_over_d_imf, "Ln/d (IMF)", "≥ 7", cr.get('preq_beam','')),
+            (AISC358BFPERROR.min_ln_over_d_smf, "Ln/d (SMF)", "≥ 7", cr.get('preq_beam','')),
+            (AISC358BFPERROR.max_column_depth, "Column depth", "≤ W36 (≈91.4 cm)", cr.get('preq_column','')),
+            (AISC358BFPERROR.max_box_column_dim, "Box column dimension", "≤ 16 in (≈40.6 cm)", cr.get('preq_column','')),
             (AISC358BFPERROR.beam_weight,   "Beam weight",          "≤ 175 lb/ft (≈260 kg/m)", cr.get('preq_beam','')),
             (AISC358BFPERROR.beam_depth,    "Beam depth",           "≤ W36 (≈91.4 cm)",         cr.get('preq_beam','')),
             (AISC358BFPERROR.max_bolt_diameter, "Max bolt diameter",f"≤ {_fmt(db_max,3)} cm",   cr.get('bolt_diam','')),
             (AISC358BFPERROR.minimum_bolt_grade,"Bolt grade",       "Fu ≥ A325 (120 ksi)",      cr.get('preq_bolt','')),
+            (AISC358BFPERROR.max_web_bolt_diameter, "Web bolt diameter", "≤ 1 in (2.54 cm)", cr.get('preq_bolt','')),
             (AISC358BFPERROR.plate_buckling,"Plate buckling (KL/r)","≤ 25",                     cr.get('buckling','')),
             (AISC358BFPERROR.max_sh,        "sh ≤ d",               f"sh={_fmt(sh,2)} cm",       cr.get('sh_lh','')),
             (AISC358BFPERROR.minimum_s3,    "s3 (plate edge)",      f"≥ 1.5–2×df",              cr.get('sh_lh','')),
@@ -542,10 +673,17 @@ def generate_report(connection: "BFPConnection",
         ]
     else:
         checks = [
+            (BFPCONNECTIONERROR.max_beam_flange_thickness, "Beam flange thickness", "≤ 3 cm", cr.get('preq_beam','')),
+            (BFPCONNECTIONERROR.minimum_ln_over_beam_depth_intermediate, "Ln/d (IMF)", "≥ 7", cr.get('preq_beam','')),
+            (BFPCONNECTIONERROR.minimum_ln_over_beam_depth_special, "Ln/d (SMF)", "≥ 9", cr.get('preq_beam','')),
+            (BFPCONNECTIONERROR.max_depth_of_H_and_salibi_column_in_moment_frame_with_slab, "Column depth with slab", "≤ 100 cm", cr.get('preq_column','')),
+            (BFPCONNECTIONERROR.max_depth_of_H_and_salibi_column_in_moment_frame_without_slab, "Column depth without slab", "≤ 40 cm", cr.get('preq_column','')),
+            (BFPCONNECTIONERROR.max_depth_width_of_box_and_HBox_column, "Box/HBox dimension", "≤ 75 cm", cr.get('preq_column','')),
             (BFPCONNECTIONERROR.beam_weight,   "Beam weight",           "≤ 250 kg/m",                cr.get('preq_beam','')),
             (BFPCONNECTIONERROR.beam_depth,    "Beam depth",            "≤ 100 cm",                  cr.get('preq_beam','')),
             (BFPCONNECTIONERROR.max_bolt_diameter,"Max bolt diameter",  "≤ 2.7 cm",                  cr.get('bolt_diam','')),
             (BFPCONNECTIONERROR.minimum_grade_of_bolt,"Bolt grade",     "fuf ≥ 10000 kg/cm²",        cr.get('preq_bolt','')),
+            (BFPCONNECTIONERROR.max_web_bolt_diameter, "Web bolt diameter", "≤ 2.7 cm", cr.get('preq_bolt','')),
             (BFPCONNECTIONERROR.check_max_buckling_factor_of_plate,"Plate buckling (KL/r)","≤ 25",  cr.get('buckling','')),
             (BFPCONNECTIONERROR.max_sh,        "sh ≤ d",                f"sh={_fmt(sh,2)} cm",        cr.get('sh_lh','')),
             (BFPCONNECTIONERROR.minimum_s3,    "s3 (plate edge)",       f"≥ 1.5–2×df",               cr.get('sh_lh','')),

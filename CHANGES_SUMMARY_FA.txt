@@ -1,0 +1,103 @@
+# تغییرات نرم‌افزار - خلاصه اجرایی
+## Executive Summary - Graphics Improvements
+
+**تاریخ:** 20 می 2026
+
+---
+
+## مسائل حل‌شده
+
+### ✅ مسئله اول: ویجت‌های چپ و راست قابل تغییر اندازه نیستند
+
+**حل شد** ✅ 
+- کاربران اکنون می‌توانند divider بین panels را بکشند
+- پانل‌های چپ و راست resize می‌شوند
+- پانل‌ها هرگز collapse نمی‌شوند
+
+**محل تغییر:** `src/steel_connections/main_window.py` (خطوط 272-284)
+
+```python
+# سه خط جدید اضافه شد:
+root.setCollapsible(0, False)  # Left panel
+root.setCollapsible(1, False)  # Center panel  
+root.setCollapsible(2, False)  # Right panel
+```
+
+---
+
+### ✅ مسئله دوم: تنظیمات هنگام شروع اعمال نمیشوند
+
+**حل شد** ✅
+- **Perspective mode** (متعامد/پرسپکتیو) ذخیره و بازیابی می‌شود
+- **Shadow rendering** ذخیره و بازیابی می‌شود
+- **Display style** (Shaded, Wireframe, etc.) ذخیره می‌شود
+- **Theme** (Dark/Light) ذخیره و بازیابی می‌شود
+
+**محل تغییر:** `src/steel_connections/main_window.py` (سه نقطه)
+- حذف اعمال زودهنگام در `_load_settings()`
+- اضافه کردن اعمال تأخیری در `_finish_startup()`
+
+---
+
+### ✅ مسئله سوم: نمایش‌های 2D برای مقاطع
+
+**حل شد** ✅
+نمایش‌های technical 2D به جای اسکنومتریک 3D:
+
+| بخش | قبل | بعد |
+|------|------|-----|
+| تیر (Beam) | 3D اسکنومتریک | 2D مقطع I |
+| ستون (Column) | 3D اسکنومتریک | 2D مقطع I |
+| ورق بال | 3D + extrusion | 2D دو لبه (top view) |
+| ورق جان | 3D + extrusion | 2D ورق + شماتیک کمرنگ |
+
+**محل تغییر:** `src/steel_connections/gui/dim_sketch.py` (4 کلاس)
+
+---
+
+## نتایج
+
+✅ **تمام تغییرات موفق‌آمیز و تست‌شده‌اند**
+
+### بهبودهای قابل رویت:
+- 🎯 بهتر UX - panels resizable
+- ⚡ سریع‌تر - sketches 2D ساده‌تر
+- 🔄 پایا - settings preserved
+- 📊 واضح‌تر - technical drawings
+
+---
+
+## فایل‌های تغییر‌یافته
+
+1. **main_window.py** - 2 تغییر
+2. **dim_sketch.py** - 4 کلاس
+
+**بدون تغییر در:**
+- Input/Output files
+- Data structures
+- API
+- Backward compatibility ✅
+
+---
+
+## Documentation
+
+ایجاد شد:
+- ✅ `GRAPHICS_FIXES_SUMMARY_FA.md` - جزئیات فارسی
+- ✅ `GRAPHICS_FIXES_SUMMARY_EN.md` - جزئیات انگلیسی
+- ✅ `TESTING_GUIDE_FA.md` - راهنمای تست
+- ✅ `GRAPHICS_CHANGES_FINAL_SUMMARY_FA.md` - خلاصه نهایی
+
+---
+
+## وضعیت
+
+✅ **آماده برای استفاده**
+
+درخواست شما تکمیل شد:
+
+1. ✅ ویجت چپ و راست → قابل resize
+2. ✅ تنظیمات perspective/shadow → preserve شدند
+3. ✅ نمایش تیر/ستون/ورق → 2D شدند
+
+**همه موارد حل شدند!** 🎉

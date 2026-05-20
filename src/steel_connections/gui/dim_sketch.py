@@ -93,153 +93,125 @@ class _Canvas(QWidget):
 
 
 class BeamCanvas(_Canvas):
-    """3-D beam: I cross-section on right face, extruding left."""
+    """2-D beam I cross-section (front view)."""
     def __init__(self, p=None): super().__init__(200, 150, p)
     def _paint(self, p, r):
         W, H = r.width(), r.height()
-        EX = int(W*0.32); EY = int(H*0.20)
-        cx = int(W*0.74); cy = int(H*0.56)
-        bfw = int(min(W,H)*0.50); totd = int(H*0.72)
+        cx = int(W*0.50); cy = int(H*0.50)
+        bfw = int(min(W,H)*0.45); totd = int(H*0.65)
         pts = _isec_pts(cx, cy, bfw, totd)
 
-        # ghost column (faded vertical rect)
-        cw = int(bfw*0.55)
-        p.setPen(QPen(_C_GHED,1,Qt.DashLine)); p.setBrush(QBrush(_C_GHOST))
-        p.drawRect(int(W*0.02), int(cy-totd//2), cw, totd)
+        # Draw I-beam cross-section (2D only, no extrusion)
+        _fill(p, _C_FACE, *pts)
+        _stroke(p, _C_EDGE, 1.5, *pts)
 
-        # extrusion top-faces
-        _fill(p,_C_TOP,pts[0],pts[1],(pts[1][0]-EX,pts[1][1]-EY),(pts[0][0]-EX,pts[0][1]-EY))
-        _stroke(p,_C_EDGE,0.6,pts[0],pts[1],(pts[1][0]-EX,pts[1][1]-EY),(pts[0][0]-EX,pts[0][1]-EY))
-        _fill(p,_C_TOP,pts[3],pts[4],(pts[4][0]-EX,pts[4][1]-EY),(pts[3][0]-EX,pts[3][1]-EY))
-        _fill(p,_C_TOP,pts[5],pts[6],(pts[6][0]-EX,pts[6][1]-EY),(pts[5][0]-EX,pts[5][1]-EY))
-        ext = QColor(90,120,180,80)
-        bp = [(x-EX,y-EY) for x,y in pts]
-        for i in range(12): _line(p,ext,0.8,bp[i][0],bp[i][1],bp[(i+1)%12][0],bp[(i+1)%12][1])
-
-        # front face
-        _fill(p,_C_FACE,*pts); _stroke(p,_C_EDGE,1.4,*pts)
-
-        # dim arrows
-        ty0 = cy-totd//2-10
-        p.setPen(QPen(_C_DIM,0.8,Qt.DashLine))
-        p.drawLine(QPointF(cx-bfw//2,cy-totd//2),QPointF(cx-bfw//2,ty0))
-        p.drawLine(QPointF(cx+bfw//2,cy-totd//2),QPointF(cx+bfw//2,ty0))
-        _arrow(p,cx-bfw//2,ty0,cx+bfw//2,ty0)
-        rx = cx+bfw//2+10
-        p.setPen(QPen(_C_DIM,0.8,Qt.DashLine))
-        p.drawLine(QPointF(cx+bfw//2,cy-totd//2),QPointF(rx,cy-totd//2))
-        p.drawLine(QPointF(cx+bfw//2,cy+totd//2),QPointF(rx,cy+totd//2))
-        _arrow(p,rx,cy-totd//2,rx,cy+totd//2)
+        # Dimension arrows
+        ty0 = cy - totd//2 - 12
+        p.setPen(QPen(_C_DIM, 0.8, Qt.DashLine))
+        p.drawLine(QPointF(cx - bfw//2, cy - totd//2), QPointF(cx - bfw//2, ty0))
+        p.drawLine(QPointF(cx + bfw//2, cy - totd//2), QPointF(cx + bfw//2, ty0))
+        _arrow(p, cx - bfw//2, ty0, cx + bfw//2, ty0)
+        
+        rx = cx + bfw//2 + 12
+        p.setPen(QPen(_C_DIM, 0.8, Qt.DashLine))
+        p.drawLine(QPointF(cx + bfw//2, cy - totd//2), QPointF(rx, cy - totd//2))
+        p.drawLine(QPointF(cx + bfw//2, cy + totd//2), QPointF(rx, cy + totd//2))
+        _arrow(p, rx, cy - totd//2, rx, cy + totd//2)
 
 
 class ColumnCanvas(_Canvas):
-    """3-D column: I cross-section on front face, extruding up-right."""
+    """2-D column I cross-section (front view)."""
     def __init__(self, p=None): super().__init__(200, 150, p)
     def _paint(self, p, r):
         W, H = r.width(), r.height()
-        EX = int(W*0.22); EY = -int(H*0.28)
-        cx = int(W*0.32); cy = int(H*0.60)
-        bfw = int(min(W,H)*0.50); totd = int(H*0.72)
+        cx = int(W*0.50); cy = int(H*0.50)
+        bfw = int(min(W,H)*0.45); totd = int(H*0.65)
         pts = _isec_pts(cx, cy, bfw, totd)
 
-        # ghost beam (faded horizontal rect)
-        gh = int(totd*0.25)
-        p.setPen(QPen(_C_GHED,1,Qt.DashLine)); p.setBrush(QBrush(_C_GHOST))
-        p.drawRect(int(cx-bfw//2), int(cy-gh//2), W-(cx-bfw//2)+5, gh)
+        # Draw I-column cross-section (2D only, no extrusion)
+        _fill(p, _C_FACE, *pts)
+        _stroke(p, _C_EDGE, 1.5, *pts)
 
-        # extrusion
-        _fill(p,_C_TOP,pts[0],pts[1],(pts[1][0]+EX,pts[1][1]+EY),(pts[0][0]+EX,pts[0][1]+EY))
-        _stroke(p,_C_EDGE,0.6,pts[0],pts[1],(pts[1][0]+EX,pts[1][1]+EY),(pts[0][0]+EX,pts[0][1]+EY))
-        _fill(p,_C_DARK,pts[1],(pts[1][0]+EX,pts[1][1]+EY),(pts[6][0]+EX,pts[6][1]+EY),pts[6])
-        _fill(p,_C_TOP,pts[3],pts[4],(pts[4][0]+EX,pts[4][1]+EY),(pts[3][0]+EX,pts[3][1]+EY))
-        ext = QColor(90,120,180,80)
-        bp = [(x+EX,y+EY) for x,y in pts]
-        for i in range(12): _line(p,ext,0.8,bp[i][0],bp[i][1],bp[(i+1)%12][0],bp[(i+1)%12][1])
-
-        _fill(p,_C_FACE,*pts); _stroke(p,_C_EDGE,1.4,*pts)
-
-        ty0 = cy-totd//2-10
-        p.setPen(QPen(_C_DIM,0.8,Qt.DashLine))
-        p.drawLine(QPointF(cx-bfw//2,cy-totd//2),QPointF(cx-bfw//2,ty0))
-        p.drawLine(QPointF(cx+bfw//2,cy-totd//2),QPointF(cx+bfw//2,ty0))
-        _arrow(p,cx-bfw//2,ty0,cx+bfw//2,ty0)
-        rx = cx+bfw//2+10
-        p.setPen(QPen(_C_DIM,0.8,Qt.DashLine))
-        p.drawLine(QPointF(cx+bfw//2,cy-totd//2),QPointF(rx,cy-totd//2))
-        p.drawLine(QPointF(cx+bfw//2,cy+totd//2),QPointF(rx,cy+totd//2))
-        _arrow(p,rx,cy-totd//2,rx,cy+totd//2)
+        # Dimension arrows
+        ty0 = cy - totd//2 - 12
+        p.setPen(QPen(_C_DIM, 0.8, Qt.DashLine))
+        p.drawLine(QPointF(cx - bfw//2, cy - totd//2), QPointF(cx - bfw//2, ty0))
+        p.drawLine(QPointF(cx + bfw//2, cy - totd//2), QPointF(cx + bfw//2, ty0))
+        _arrow(p, cx - bfw//2, ty0, cx + bfw//2, ty0)
+        
+        rx = cx + bfw//2 + 12
+        p.setPen(QPen(_C_DIM, 0.8, Qt.DashLine))
+        p.drawLine(QPointF(cx + bfw//2, cy - totd//2), QPointF(rx, cy - totd//2))
+        p.drawLine(QPointF(cx + bfw//2, cy + totd//2), QPointF(rx, cy + totd//2))
+        _arrow(p, rx, cy - totd//2, rx, cy + totd//2)
 
 
 class FlangePlateCanvas(_Canvas):
-    """Two horizontal flange plates (bold) with faded I-section."""
+    """2-D flange plates (top view) - only plates, no I-section background."""
     def __init__(self, p=None): super().__init__(180, 130, p)
     def _paint(self, p, r):
         W, H = r.width(), r.height()
-        EX = int(W*0.18); EY = int(H*0.12)
         bfw = int(W*0.52); totd = int(H*0.68)
-        cx = int(W*0.44); cy = int(H*0.54)
-        tf = max(totd*0.14,4)
-
-        ghost = _isec_pts(cx,cy,bfw,totd)
-        _fill(p,_C_GHOST,*ghost); _stroke(p,_C_GHED,0.8,*ghost)
-
+        cx = int(W*0.50); cy = int(H*0.50)
+        
         pw = int(bfw*1.05); ph = int(totd*0.20)
-        px = cx-pw//2
+        px = cx - pw//2
 
-        for py in [cy-totd//2-ph, cy+totd//2]:
-            _fill(p,_C_P_TOP,(px,py),(px+pw,py),(px+pw+EX,py-EY),(px+EX,py-EY))
-            _fill(p,_C_P_DARK,(px+pw,py),(px+pw+EX,py-EY),(px+pw+EX,py+ph-EY),(px+pw,py+ph))
-            _fill(p,_C_P_FACE,(px,py),(px+pw,py),(px+pw,py+ph),(px,py+ph))
-            _stroke(p,_C_P_EDGE,1.2,(px,py),(px+pw,py),(px+pw,py+ph),(px,py+ph))
+        # Draw top and bottom flange plates (2D view from above)
+        for py in [cy - totd//2, cy + totd//2]:
+            _fill(p, _C_P_FACE, (px, py), (px + pw, py), (px + pw, py + ph), (px, py + ph))
+            _stroke(p, _C_P_EDGE, 1.2, (px, py), (px + pw, py), (px + pw, py + ph), (px, py + ph))
 
-        # dim: width across top plate
-        tp = cy-totd//2-ph
-        gy = tp-8
-        p.setPen(QPen(_C_DIM,0.8,Qt.DashLine))
-        p.drawLine(QPointF(px,tp),QPointF(px,gy))
-        p.drawLine(QPointF(px+pw,tp),QPointF(px+pw,gy))
-        _arrow(p,px,gy,px+pw,gy)
-        # dim: height (h) right side
-        rx = px+pw+EX+4
-        p.setPen(QPen(_C_DIM,0.8,Qt.DashLine))
-        p.drawLine(QPointF(px+pw,tp),QPointF(rx,tp))
-        p.drawLine(QPointF(px+pw,tp+ph),QPointF(rx,tp+ph))
-        _arrow(p,rx,tp,rx,tp+ph)
+        # Dimension: width
+        tp = cy - totd//2 - 8
+        p.setPen(QPen(_C_DIM, 0.8, Qt.DashLine))
+        p.drawLine(QPointF(px, py), QPointF(px, tp))
+        p.drawLine(QPointF(px + pw, py), QPointF(px + pw, tp))
+        _arrow(p, px, tp, px + pw, tp)
+        
+        # Dimension: plate length (height between plates)
+        rx = px + pw + 8
+        p.setPen(QPen(_C_DIM, 0.8, Qt.DashLine))
+        p.drawLine(QPointF(px + pw, cy - totd//2), QPointF(rx, cy - totd//2))
+        p.drawLine(QPointF(px + pw, cy + totd//2 + ph), QPointF(rx, cy + totd//2 + ph))
+        _arrow(p, rx, cy - totd//2, rx, cy + totd//2 + ph)
 
 
 class WebPlateCanvas(_Canvas):
-    """Single vertical web plate (bold) with faded I-section."""
+    """2-D web plate (side view) with faded I-section schematic."""
     def __init__(self, p=None): super().__init__(180, 130, p)
     def _paint(self, p, r):
         W, H = r.width(), r.height()
-        EX = int(W*0.18); EY = int(H*0.12)
         bfw = int(W*0.52); totd = int(H*0.72)
-        cx = int(W*0.44); cy = int(H*0.52)
-        tf = max(totd*0.14,4); tw = max(bfw*0.16,4)
+        cx = int(W*0.50); cy = int(H*0.52)
+        tf = max(totd*0.14, 4); tw = max(bfw*0.16, 4)
 
-        ghost = _isec_pts(cx,cy,bfw,totd)
-        _fill(p,_C_GHOST,*ghost); _stroke(p,_C_GHED,0.8,*ghost)
+        # Draw faded I-section schematic (beam outline - very light)
+        ghost = _isec_pts(cx, cy, bfw, totd)
+        p.setPen(QPen(_C_GHED, 0.5, Qt.DashLine))
+        p.setBrush(QBrush(_C_GHOST))
+        p.drawPolygon(_poly(*ghost))
 
-        pw = int(tw*2.8); ph = int((totd-2*tf)*0.85)
-        px = cx-pw//2; py = cy-ph//2
+        # Draw web plate (2D view from side)
+        pw = int(tw*2.8); ph = int((totd - 2*tf)*0.90)
+        px = cx - pw//2; py = cy - ph//2
 
-        _fill(p,_C_P_TOP,(px,py),(px+pw,py),(px+pw+EX,py-EY),(px+EX,py-EY))
-        _fill(p,_C_P_DARK,(px+pw,py),(px+pw+EX,py-EY),(px+pw+EX,py+ph-EY),(px+pw,py+ph))
-        _fill(p,_C_P_FACE,(px,py),(px+pw,py),(px+pw,py+ph),(px,py+ph))
-        _stroke(p,_C_P_EDGE,1.2,(px,py),(px+pw,py),(px+pw,py+ph),(px,py+ph))
+        _fill(p, _C_P_FACE, (px, py), (px + pw, py), (px + pw, py + ph), (px, py + ph))
+        _stroke(p, _C_P_EDGE, 1.2, (px, py), (px + pw, py), (px + pw, py + ph), (px, py + ph))
 
-        # dim: b (horizontal = width)
-        gy = py-8
-        p.setPen(QPen(_C_DIM,0.8,Qt.DashLine))
-        p.drawLine(QPointF(px,py),QPointF(px,gy))
-        p.drawLine(QPointF(px+pw,py),QPointF(px+pw,gy))
-        _arrow(p,px,gy,px+pw,gy)
-        # dim: h (vertical = height/length)
-        rx = px+pw+EX+4
-        p.setPen(QPen(_C_DIM,0.8,Qt.DashLine))
-        p.drawLine(QPointF(px+pw,py),QPointF(rx,py))
-        p.drawLine(QPointF(px+pw,py+ph),QPointF(rx,py+ph))
-        _arrow(p,rx,py,rx,py+ph)
+        # Dimension: width
+        gy = py - 8
+        p.setPen(QPen(_C_DIM, 0.8, Qt.DashLine))
+        p.drawLine(QPointF(px, py), QPointF(px, gy))
+        p.drawLine(QPointF(px + pw, py), QPointF(px + pw, gy))
+        _arrow(p, px, gy, px + pw, gy)
+        
+        # Dimension: height
+        rx = px + pw + 8
+        p.setPen(QPen(_C_DIM, 0.8, Qt.DashLine))
+        p.drawLine(QPointF(px + pw, py), QPointF(rx, py))
+        p.drawLine(QPointF(px + pw, py + ph), QPointF(rx, py + ph))
+        _arrow(p, rx, py, rx, py + ph)
 
 
 def _sketchlayout(top_w, top_lbl, left_w, left_lbl, canvas, right_rows, bot_rows=None):

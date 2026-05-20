@@ -220,12 +220,18 @@ class MainWindow(QMainWindow):
             self.calculate_connection()
 
     def _finish_startup(self) -> None:
+        # Apply saved preferences two times to ensure they take effect
+        # First application sets the UI state
         self._apply_saved_preferences_to_ui()
+        
+        # Load last file or calculate default connection
         if self._startup_last_file:
             self._restore_last_file()
         else:
             self.calculate_connection()
-        QTimer.singleShot(50, self._apply_saved_preferences_to_ui)
+        
+        # Second application (delayed) ensures settings are fully applied after UI is ready
+        QTimer.singleShot(100, lambda: self._apply_saved_preferences_to_ui())
 
     # ── menu bar ──────────────────────────────────────────────────
     def _build_menu(self):
@@ -279,6 +285,10 @@ class MainWindow(QMainWindow):
         root.setStretchFactor(0, 0)
         root.setStretchFactor(1, 1)
         root.setStretchFactor(2, 0)
+        # Allow left and right panels to be resizable but not collapsible
+        root.setCollapsible(0, False)
+        root.setCollapsible(1, False)
+        root.setCollapsible(2, False)
 
     # ── left: inputs ─────────────────────────────────────────────────────────
 
@@ -718,7 +728,7 @@ class MainWindow(QMainWindow):
         self._saved_display_style = qs.value("display_style", "shaded", type=str) or "shaded"
         self._saved_shadows_enabled = qs.value("shadows_enabled", False, type=bool)
         self._saved_dark_theme = qs.value("dark_theme", False, type=bool)
-        self._apply_saved_preferences_to_ui()
+        # NOTE: Preferences are applied later in _finish_startup() after all widgets are ready
         last_file = qs.value("last_file", "", type=str) or ""
         if last_file and Path(last_file).is_file():
             self._startup_last_file = last_file

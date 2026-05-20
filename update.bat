@@ -1,56 +1,68 @@
 @echo off
-setlocal EnableExtensions EnableDelayedExpansion
+setlocal EnableDelayedExpansion
+title Steel Connections - Updater
+color 0E
 
-title Steel Connections Updater
-
-echo.
-echo =====================================================
-echo   Steel Connections - Update Script
-echo =====================================================
+echo ============================================================
+echo          Steel Connections - Update ^& Run
+echo ============================================================
 echo.
 
 set "ROOT=%~dp0"
 cd /d "%ROOT%"
 
-if exist ".git" (
-    where git >nul 2>&1
-    if not errorlevel 1 (
-        echo [1/3] Pulling latest changes from git...
-        git pull --ff-only
-        if errorlevel 1 (
-            echo [WARNING] git pull failed. Continuing with dependency update.
-        )
-    ) else (
-        echo [INFO] Git is not available. Skipping source update.
-    )
-) else (
-    echo [INFO] This installation is not a git clone. Skipping source update.
-)
-
-if not exist ".venv\Scripts\python.exe" (
-    echo [2/3] Virtual environment not found. Running install.bat...
-    call "%ROOT%install.bat"
-    exit /b %errorlevel%
-)
-
-echo [2/3] Updating pip...
-call ".venv\Scripts\python.exe" -m pip install --upgrade pip setuptools wheel
-
-echo [3/3] Reinstalling dependencies...
-call ".venv\Scripts\python.exe" -m pip install -e .
-if errorlevel 1 (
-    echo [ERROR] Update failed during dependency installation.
+:: Check that Git is available
+where git >nul 2>&1
+if %errorlevel% neq 0 (
+    echo  ERROR: Git is not installed or not in PATH.
+    echo  Please run install.bat first.
     pause
     exit /b 1
 )
 
-echo.
-echo Update completed successfully.
-echo.
-set /p RUNNOW=Run Steel Connections now? ^(Y/N^): 
-if /I "%RUNNOW%"=="Y" (
-    call "%ROOT%run_steel_connections.bat"
+:: Check we are inside a git repo
+git rev-parse --is-inside-work-tree >nul 2>&1
+if %errorlevel% neq 0 (
+    echo  ERROR: This folder is not a Git repository.
+    echo  Please run install.bat first or clone the repo.
+    pause
+    exit /b 1
 )
 
-pause
-exit /b 0
+:: Pull latest changes
+echo [1/2] Pulling latest changes from GitHub ...
+git pull
+if %errorlevel% neq 0 (
+    echo.
+    echo  WARNING: git pull failed. You may have local changes.
+    echo  Trying git stash then pull ...
+    git stash
+    git pull
+    if !errorlevel! neq 0 (
+        echo  ERROR: Could not update. Please resolve manually.
+        pause
+        exit /b 1
+    )
+    echo  Update succeeded. Your local changes were stashed.
+    echo  Run "git stash pop" to restore them.
+)
+echo  Code updated.
+echo.
+
+:: Run the app (uv will auto-install any new dependencies)
+echo [2/2] Launching Steel Connections ...
+echo.
+
+where uv >nul 2>&1
+if %errorlevel% neq 0 (
+    echo  uv not found. Running full setup ...
+    call "%ROOT%install.bat"
+    exit /b
+)
+
+uv run --no-dev python src/steel_connections/main_window.py
+if %errorlevel% neq 0 (
+    echo.
+    echo  Application exited with an error.
+    pause
+)

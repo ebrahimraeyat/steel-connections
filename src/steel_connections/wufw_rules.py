@@ -16,8 +16,12 @@ class WUFWCodeRules:
     column_depth_max_cm: float = 91.44
     shear_plate_height_db_ratio_min: float = 2.0 / 3.0
     shear_plate_width_bf_ratio_min: float = 0.5
+    shear_plate_overlap_min_cm: float = 0.6
+    shear_plate_overlap_max_cm: float = 1.2
     shear_plate_extra_beyond_hole_min_cm: float = 5.0
     continuity_plate_trigger_factor: float = 0.4
+    access_hole_length_min_cm: float = 3.0
+    access_hole_height_min_cm: float = 1.2
 
 
 @dataclass(frozen=True)

@@ -26,9 +26,13 @@ class WUFWConnection(SteelMomentConnection):
     shear_plate_height: float = 0.0
     shear_plate_width: float = 0.0
     shear_plate_thickness: float = 0.0
+    shear_plate_overlap_cm: float = 0.8
 
     web_fillet_weld_size: float = 0.0
     cjp_electrode_fexx: float = 4921.0
+    access_hole_length: float = 3.0
+    access_hole_height: float = 1.2
+    access_hole_surface_finish_ok: bool = True
 
     material_defaults: WUFWMaterialDefaults = field(default_factory=WUFWMaterialDefaults)
     geometry_defaults: WUFWGeometryDefaults = field(default_factory=WUFWGeometryDefaults)

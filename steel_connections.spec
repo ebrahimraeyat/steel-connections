@@ -7,11 +7,59 @@
 #   pyinstaller steel_connections.spec --noconfirm
 # ---------------------------------------------------------
 
+import glob
 import sys
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
 
 SRC = Path('src')
+
+
+def collect_conda_occt_runtime_binaries():
+    """
+    Collect OCCT runtime DLLs from <conda>/Library/bin.
+    IMPORTANT: exclude all Qt DLLs — PySide6 ships its own Qt and mixing
+    conda's Qt DLLs would cause 'procedure not found' errors.
+    """
+    lib_bin = Path(sys.prefix) / 'Library' / 'bin'
+    if not lib_bin.exists():
+        print(f"[DEBUG] Library/bin not found at {lib_bin}, skipping.")
+        return []
+
+    # Only these prefixes are OCCT/FreeImage/TBB — safe to add
+    INCLUDE_PREFIXES = (
+        'tk',       # TK*.dll  — OCCT modules
+        'tbb',      # tbb*.dll — Intel TBB (OCCT threading)
+        'tbbmalloc',
+        'freeimage',
+        'freetype',
+        'openvr',
+        'openal',
+    )
+
+    # Never copy anything that looks like a Qt or PyQt DLL
+    EXCLUDE_PREFIXES = (
+        'qt',       # Qt5*.dll, Qt6*.dll, QtCore.dll …
+        'pyqt',
+        'shiboken',
+    )
+
+    collected = []
+    seen = set()
+    for dll_path in lib_bin.glob('*.dll'):
+        dll_name = dll_path.name.lower()
+        if dll_name in seen:
+            continue
+        if any(dll_name.startswith(p) for p in EXCLUDE_PREFIXES):
+            continue
+        if any(dll_name.startswith(p) for p in INCLUDE_PREFIXES):
+            seen.add(dll_name)
+            collected.append((str(dll_path), '.'))
+
+    print(f"[DEBUG] OCCT runtime DLLs from {lib_bin}: {len(collected)}")
+    for p, _ in collected:
+        print(f"        {Path(p).name}")
+    return collected
 
 # ── Collect OCC (pythonocc-core) ──────────────────────────────────────────────
 occ_datas, occ_binaries, occ_hiddenimports = collect_all('OCC')
@@ -30,7 +78,7 @@ app_datas = [
 ]
 
 all_datas    = occ_datas    + pyside_datas    + app_datas
-all_binaries = occ_binaries + pyside_binaries
+all_binaries = occ_binaries + pyside_binaries + collect_conda_occt_runtime_binaries()
 all_hidden   = (
     occ_hiddenimports
     + pyside_hiddenimports
@@ -49,13 +97,25 @@ a = Analysis(
     binaries=all_binaries,
     datas=all_datas,
     hiddenimports=all_hidden,
-    hookspath=[],
+    hookspath=['hooks'],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
         # reduce size — not needed at runtime
         'tkinter', 'matplotlib', 'scipy', 'IPython', 'jupyter',
         'pytest', 'unittest',
+        # exclude conflicting Qt binding — only PySide6 is used
+        'PyQt5', 'PyQt6',
+        # --- Heavy Qt Modules (Not used in this app) ---
+        'PySide6.QtWebEngine', 'PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets',
+        'PySide6.QtQml', 'PySide6.QtQuick', 'PySide6.QtQuickWidgets',
+        'PySide6.Qt3DCore', 'PySide6.Qt3DRender', 'PySide6.Qt3DExtras',
+        'PySide6.QtMultimedia', 'PySide6.QtMultimediaWidgets',
+        'PySide6.QtSql', 'PySide6.QtTest', 'PySide6.QtCharts',
+        'PySide6.QtDataVisualization', 'PySide6.QtNetwork',
+        'PySide6.QtTextToSpeech', 'PySide6.QtVirtualKeyboard',
+        'PySide6.QtLocation', 'PySide6.QtPositioning',
+        'PySide6.QtBluetooth', 'PySide6.QtNfc', 'PySide6.QtSerialPort'
     ],
     noarchive=False,
     optimize=0,

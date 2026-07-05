@@ -30,8 +30,11 @@ from steel_connections.member.member import SteelSection
 from steel_connections.component.bolt import Bolt, BoltGroup2D
 from steel_connections.component.plate import Plate
 from steel_connections.bfp_connection_design import (
-    design_bfp_connection, BoltType, DesignMethod, ConnectionType
+    design_bfp_connection, BoltType, DesignMethod, ConnectionType as BFPDesignConnectionType
 )
+from steel_connections.connection_types import ConnectionType as MomentConnectionType
+from steel_connections.wufw_connection import WUFWConnection
+from steel_connections.cad.wufw_cad import build_wufw_shapes
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -319,6 +322,10 @@ class MainWindow(QMainWindow):
         for code in DesignCode:
             self.design_code_combo.addItem(code.value, userData=code)
         dc_form.addRow("Standard:", self.design_code_combo)
+        self.connection_type_combo = QComboBox()
+        self.connection_type_combo.addItem("Bolted Flange Plate (BFP)", userData=MomentConnectionType.BFP)
+        self.connection_type_combo.addItem("Welded Unreinforced Flange-Welded Web (WUF-W)", userData=MomentConnectionType.WUFW)
+        dc_form.addRow("Connection type:", self.connection_type_combo)
         lay.addWidget(dc_box)
         lay.addWidget(_hr())
 
@@ -443,7 +450,36 @@ class MainWindow(QMainWindow):
         m10_plate_form.addRow("Bolt spacing (mm):", self.m10_bolt_spacing)
         m10_lay.addWidget(m10_plate_box)
 
+        self._wufw_group = QGroupBox()
+        wufw_lay = QVBoxLayout(self._wufw_group)
+        wufw_lay.setContentsMargins(0, 0, 0, 0)
+        wufw_lay.setSpacing(4)
+
+        wufw_lay.addWidget(_section_label("WUF-W Design Inputs"))
+        wufw_load_box = QGroupBox(); wufw_load_form = QFormLayout(wufw_load_box)
+        wufw_load_form.setContentsMargins(6, 4, 6, 4)
+        self.wufw_mu = QDoubleSpinBox(); _setup_spin(self.wufw_mu, 0, 1e9, 0, " kgf.cm")
+        self.wufw_vu = QDoubleSpinBox(); _setup_spin(self.wufw_vu, 0, 1e8, 0, " kgf")
+        self.wufw_pu = QDoubleSpinBox(); _setup_spin(self.wufw_pu, 0, 1e8, 0, " kgf")
+        wufw_load_form.addRow("Mu:", self.wufw_mu)
+        wufw_load_form.addRow("Vu:", self.wufw_vu)
+        wufw_load_form.addRow("Pu:", self.wufw_pu)
+        wufw_lay.addWidget(wufw_load_box)
+
+        wufw_geo_box = QGroupBox(); wufw_geo_form = QFormLayout(wufw_geo_box)
+        wufw_geo_form.setContentsMargins(6, 4, 6, 4)
+        self.wufw_shear_plate_height = QDoubleSpinBox(); _setup_spin(self.wufw_shear_plate_height, 0.1, 120, 20, " cm")
+        self.wufw_shear_plate_width = QDoubleSpinBox(); _setup_spin(self.wufw_shear_plate_width, 0.1, 120, 12, " cm")
+        self.wufw_shear_plate_thickness = QDoubleSpinBox(); _setup_spin(self.wufw_shear_plate_thickness, 0.1, 8, 1, " cm")
+        self.wufw_web_fillet_weld = QDoubleSpinBox(); _setup_spin(self.wufw_web_fillet_weld, 0.1, 3, 0.8, " cm")
+        wufw_geo_form.addRow("Shear plate height:", self.wufw_shear_plate_height)
+        wufw_geo_form.addRow("Shear plate width:", self.wufw_shear_plate_width)
+        wufw_geo_form.addRow("Shear plate thickness:", self.wufw_shear_plate_thickness)
+        wufw_geo_form.addRow("Web fillet weld size:", self.wufw_web_fillet_weld)
+        wufw_lay.addWidget(wufw_geo_box)
+
         design_lay.addWidget(self._mabhas10_group)
+        design_lay.addWidget(self._wufw_group)
         design_lay.addStretch()
 
         input_tabs.addTab(member_tab, "Members")
@@ -509,7 +545,7 @@ class MainWindow(QMainWindow):
         bar.addStretch()
 
         self.report_lang = QComboBox()
-        self.report_lang.addItems(["English", "فارسی"])
+        self.report_lang.addItems(["English"])
         self.report_lang.setFixedHeight(22)
         bar.addWidget(QLabel("Lang:"))
         bar.addWidget(self.report_lang)
@@ -681,6 +717,9 @@ class MainWindow(QMainWindow):
         self.design_code_combo.currentIndexChanged.connect(self._debounce.start)
         self.design_code_combo.currentIndexChanged.connect(lambda _=None: _mark_dirty())
         self.design_code_combo.currentIndexChanged.connect(self._on_code_changed)
+        self.connection_type_combo.currentIndexChanged.connect(self._debounce.start)
+        self.connection_type_combo.currentIndexChanged.connect(lambda _=None: _mark_dirty())
+        self.connection_type_combo.currentIndexChanged.connect(self._on_code_changed)
         self.design_code_combo.currentIndexChanged.connect(lambda _=None: self._save_app_settings())
         self.view_perspective_switch.toggled.connect(lambda _=None: self._save_app_settings())
         self.view_style_combo.currentIndexChanged.connect(lambda _=None: self._save_app_settings())
@@ -693,9 +732,12 @@ class MainWindow(QMainWindow):
         self._debounce.start()
 
     def _on_code_changed(self):
-        """Keep the unified UI visible for both supported design codes."""
-        self._mabhas10_group.setVisible(True)
-        self._m10_results_widget.setVisible(True)
+        """Toggle input/result groups by selected connection type."""
+        ctype = self.connection_type_combo.currentData()
+        is_bfp = ctype == MomentConnectionType.BFP
+        self._mabhas10_group.setVisible(is_bfp)
+        self._m10_results_widget.setVisible(is_bfp)
+        self._wufw_group.setVisible(not is_bfp)
 
     # ── settings ──────────────────────────────────────────────────────────────
 
@@ -887,7 +929,74 @@ class MainWindow(QMainWindow):
 
     def _do_calculate(self):
         self._last_connection = None  # reset before each run
+        ctype = self.connection_type_combo.currentData()
+        if ctype == MomentConnectionType.WUFW:
+            self._do_calculate_wufw()
+            return
         self._do_calculate_mabhas10()
+
+    def _make_steel_section(self) -> tuple[SteelSection, SteelSection]:
+        fy = self.m10_fy_beam.value()
+        fu = self.m10_fu_beam.value()
+        beam = SteelSection.from_section_dict({
+            'sec_type': 'WB',
+            'b': self.beam_bf.value(), 'd': self.beam_totaldepth.value(),
+            't_w': float(self.beam_tw.currentText()),
+            't_f': float(self.beam_tf.currentText()),
+            't': float(self.beam_tf.currentText()),
+            'f_y': fy * 0.102,
+            'f_yw': fy * 0.102,
+            'f_u': fu * 0.102,
+        })
+        col = SteelSection.from_section_dict({
+            'sec_type': 'WC',
+            'b': self.column_bf.value(), 'd': self.column_totaldepth.value(),
+            't_w': float(self.column_tw.currentText()),
+            't_f': float(self.column_tf.currentText()),
+            't': float(self.column_tf.currentText()),
+            'f_y': fy * 0.102,
+            'f_yw': fy * 0.102,
+            'f_u': fu * 0.102,
+        })
+        return beam, col
+
+    def _do_calculate_wufw(self):
+        """Run WUF-W check skeleton and update log/preview."""
+        try:
+            beam, col = self._make_steel_section()
+            conn = WUFWConnection(
+                beam=beam,
+                column=col,
+                mu=self.wufw_mu.value(),
+                vu=self.wufw_vu.value(),
+                pu=self.wufw_pu.value(),
+                shear_plate_height=self.wufw_shear_plate_height.value(),
+                shear_plate_width=self.wufw_shear_plate_width.value(),
+                shear_plate_thickness=self.wufw_shear_plate_thickness.value(),
+                web_fillet_weld_size=self.wufw_web_fillet_weld.value(),
+            )
+            result = conn.run_all_checks()
+            self._last_connection = conn
+            self._last_m10_result = None
+
+            self.results.clear()
+            self.log_info("Design code: <b>AISC 358-16 Chapter 8 / AISC 341-16</b>", color="#aaa")
+            self.log_info(f"Connection type: <b>{conn.connection_type.value}</b>", color="#aaa")
+            for chk in result.checks:
+                if chk.is_pass is True:
+                    self.log_success(f"{chk.title} ({chk.code_ref})")
+                elif chk.is_pass is False:
+                    self.log_error(f"{chk.title} ({chk.code_ref})")
+                else:
+                    self.log_warning(f"{chk.title} ({chk.code_ref}) — pending detailed implementation")
+
+            cad_model = build_wufw_shapes(conn)
+            if cad_model:
+                self.log_info("WUF-W preview skeleton generated.")
+
+        except Exception as e:
+            import traceback
+            QMessageBox.critical(self, "WUF-W calculation error", f"{e}\n\n{traceback.format_exc()}")
 
     def _do_calculate_mabhas10(self):
         """Run Mabhas10 BFP connection design and update UI."""
@@ -926,7 +1035,7 @@ class MainWindow(QMainWindow):
                 edge_distance_mm=edge_d,
                 bolt_spacing_mm=bolt_sp,
                 design_method=dm,
-                connection_type=ConnectionType.BOTH_FLANGES,
+                connection_type=BFPDesignConnectionType.BOTH_FLANGES,
             )
 
             self.results.clear()
@@ -949,24 +1058,7 @@ class MainWindow(QMainWindow):
 
             # Build 3D shapes using standard BFP connection for geometry
             try:
-                beam = SteelSection.from_section_dict({
-                    'sec_type': 'WB',
-                    'b': self.beam_bf.value(), 'd': self.beam_totaldepth.value(),
-                    't_w': float(self.beam_tw.currentText()),
-                    't_f': float(self.beam_tf.currentText()),
-                    't':   float(self.beam_tf.currentText()),
-                    'f_y': fy * 0.102,  # MPa → kgf/cm² approx
-                    'f_yw': fy * 0.102,
-                    'f_u': fu * 0.102,
-                })
-                col = SteelSection.from_section_dict({
-                    'sec_type': 'WC',
-                    'b': self.column_bf.value(), 'd': self.column_totaldepth.value(),
-                    't_w': float(self.column_tw.currentText()),
-                    't_f': float(self.column_tf.currentText()),
-                    't':   float(self.column_tf.currentText()),
-                    'f_y': fy * 0.102, 'f_yw': fy * 0.102, 'f_u': fu * 0.102,
-                })
+                beam, col = self._make_steel_section()
                 bolt_3d = Bolt(d_f=float(self.bolt_diameter.currentText()))
                 bolt_group_3d = BoltGroup2D(
                     n_p=int(self.bolt_n.value()), n_g=int(self.bolt_m.value()),
@@ -1112,34 +1204,36 @@ class MainWindow(QMainWindow):
                                 "Run the calculation first before exporting a report.")
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save Report", "BFP_Connection_Report.docx",
+            self, "Save Report", "Connection_Report.docx",
             "Word Document (*.docx)")
         if not path:
             return
         try:
             import os
 
-            lang = "fa" if self.report_lang.currentText() == "فارسی" else "en"
+            out = None
+            if isinstance(self._last_connection, WUFWConnection):
+                out = self._last_connection.generate_report(output_path=path)
+            else:
+                import tempfile
+                from steel_connections.report.bfp_report import generate_report
 
-            import tempfile
-            from steel_connections.report.bfp_report import generate_report
+                tmp_dir = tempfile.mkdtemp(prefix="bfp_report_views_")
+                view_images: dict = {}
+                try:
+                    view_images = self._viewer.capture_views(tmp_dir)
+                except Exception:
+                    pass
 
-            tmp_dir = tempfile.mkdtemp(prefix="bfp_report_views_")
-            view_images: dict = {}
-            try:
-                view_images = self._viewer.capture_views(tmp_dir)
-            except Exception:
-                pass
-
-            out = generate_report(
-                self._last_connection,
-                project_info={
-                    "date": str(__import__('datetime').date.today()),
-                    "standard": self.design_code_combo.currentText(),
-                },
-                output_path=path,
-                view_images=view_images,
-            )
+                out = generate_report(
+                    self._last_connection,
+                    project_info={
+                        "date": str(__import__('datetime').date.today()),
+                        "standard": self.design_code_combo.currentText(),
+                    },
+                    output_path=path,
+                    view_images=view_images,
+                )
             reply = QMessageBox.question(
                 self, "Report Saved",
                 f"Report saved to:\n{out}\n\nOpen the file now?",

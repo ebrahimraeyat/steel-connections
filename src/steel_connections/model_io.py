@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 
-MODEL_VERSION = 1
+MODEL_VERSION = 2
 FILE_EXT      = ".scj"          # Steel Connection JSON
 FILE_FILTER   = "Steel Connection (*.scj);;JSON (*.json);;All files (*)"
 
@@ -41,6 +41,11 @@ def model_to_dict(mw) -> dict[str, Any]:
     data: dict[str, Any] = {
         "version":     MODEL_VERSION,
         "design_code": dc_val,
+        "connection_type": (
+            mw.connection_type_combo.currentData().value
+            if hasattr(mw.connection_type_combo.currentData(), "value")
+            else str(mw.connection_type_combo.currentData())
+        ),
         "beam": {
             "b":   mw.beam_bf.value(),
             "d":   mw.beam_totaldepth.value(),
@@ -72,6 +77,15 @@ def model_to_dict(mw) -> dict[str, Any]:
             "d_f": float(mw.web_bolt_diameter.currentText()),
             "n_p": mw.web_bolt_nz.value(),
             "n_g": mw.web_bolt_nx.value(),
+        },
+        "wufw": {
+            "mu": mw.wufw_mu.value(),
+            "vu": mw.wufw_vu.value(),
+            "pu": mw.wufw_pu.value(),
+            "shear_plate_height": mw.wufw_shear_plate_height.value(),
+            "shear_plate_width": mw.wufw_shear_plate_width.value(),
+            "shear_plate_thickness": mw.wufw_shear_plate_thickness.value(),
+            "web_fillet_weld": mw.wufw_web_fillet_weld.value(),
         },
     }
     return data
@@ -129,7 +143,11 @@ def load_model(mw, path: str | Path) -> None:
         mw.bolt_diameter, mw.bolt_n, mw.bolt_m,
         mw.web_plate_length, mw.web_plate_height, mw.web_plate_thickness,
         mw.web_bolt_diameter, mw.web_bolt_nz, mw.web_bolt_nx,
+        mw.wufw_mu, mw.wufw_vu, mw.wufw_pu,
+        mw.wufw_shear_plate_height, mw.wufw_shear_plate_width,
+        mw.wufw_shear_plate_thickness, mw.wufw_web_fillet_weld,
         mw.design_code_combo,
+        mw.connection_type_combo,
     ]
     for w in all_widgets:
         w.blockSignals(True)
@@ -142,6 +160,15 @@ def load_model(mw, path: str | Path) -> None:
             item_val = item.value if hasattr(item, "value") else str(item)
             if item_val == dc_val:
                 mw.design_code_combo.setCurrentIndex(i)
+                break
+
+        # Connection type (schema v2+)
+        ct_val = data.get("connection_type", "BFP")
+        for i in range(mw.connection_type_combo.count()):
+            item = mw.connection_type_combo.itemData(i)
+            item_val = item.value if hasattr(item, "value") else str(item)
+            if item_val == ct_val:
+                mw.connection_type_combo.setCurrentIndex(i)
                 break
 
         # Beam
@@ -181,6 +208,16 @@ def load_model(mw, path: str | Path) -> None:
         _set_combo(mw.web_bolt_diameter, wb.get("d_f", mw.web_bolt_diameter.currentText()))
         mw.web_bolt_nz.setValue(int(wb.get("n_p", mw.web_bolt_nz.value())))
         mw.web_bolt_nx.setValue(int(wb.get("n_g", mw.web_bolt_nx.value())))
+
+        # WUF-W inputs (schema v2+)
+        wufw = data.get("wufw", {})
+        mw.wufw_mu.setValue(float(wufw.get("mu", mw.wufw_mu.value())))
+        mw.wufw_vu.setValue(float(wufw.get("vu", mw.wufw_vu.value())))
+        mw.wufw_pu.setValue(float(wufw.get("pu", mw.wufw_pu.value())))
+        mw.wufw_shear_plate_height.setValue(float(wufw.get("shear_plate_height", mw.wufw_shear_plate_height.value())))
+        mw.wufw_shear_plate_width.setValue(float(wufw.get("shear_plate_width", mw.wufw_shear_plate_width.value())))
+        mw.wufw_shear_plate_thickness.setValue(float(wufw.get("shear_plate_thickness", mw.wufw_shear_plate_thickness.value())))
+        mw.wufw_web_fillet_weld.setValue(float(wufw.get("web_fillet_weld", mw.wufw_web_fillet_weld.value())))
 
     finally:
         for w in all_widgets:

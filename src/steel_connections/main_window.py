@@ -237,6 +237,12 @@ class MainWindow(QMainWindow):
             self._restore_last_file()
         else:
             self.calculate_connection()
+
+        # Enforce the module's connection type (launcher selection wins over any
+        # connection type restored from the last opened file).
+        self._apply_preset_connection_type()
+        self._on_code_changed()
+        self.calculate_connection()
         
         # Second application (delayed) ensures settings are fully applied after UI is ready
         QTimer.singleShot(100, lambda: self._apply_saved_preferences_to_ui())
@@ -330,7 +336,8 @@ class MainWindow(QMainWindow):
         self.connection_type_combo = QComboBox()
         self.connection_type_combo.addItem("Bolted Flange Plate (BFP)", userData=MomentConnectionType.BFP)
         self.connection_type_combo.addItem("Welded Unreinforced Flange-Welded Web (WUF-W)", userData=MomentConnectionType.WUFW)
-        dc_form.addRow("Connection type:", self.connection_type_combo)
+        self._connection_type_label = QLabel("Connection type:")
+        dc_form.addRow(self._connection_type_label, self.connection_type_combo)
         lay.addWidget(dc_box)
         lay.addWidget(_hr())
 
@@ -755,6 +762,10 @@ class MainWindow(QMainWindow):
             self.connection_type_combo.setCurrentIndex(idx)
             self.connection_type_combo.blockSignals(False)
         self.connection_type_combo.setEnabled(False)
+        # The type is fixed by the launcher, so hide the now-redundant selector.
+        self.connection_type_combo.setVisible(False)
+        if hasattr(self, "_connection_type_label"):
+            self._connection_type_label.setVisible(False)
 
     def _on_code_changed(self):
         """Toggle input/result groups by selected connection type."""
@@ -1020,9 +1031,27 @@ class MainWindow(QMainWindow):
 
             self._render_wufw_results(result)
 
-            cad_model = build_wufw_shapes(conn)
-            if cad_model:
-                self.log_info("WUF-W preview skeleton generated.")
+            def _plate_needed(*keywords: str) -> bool:
+                for c in result.checks:
+                    text = f"{getattr(c, 'key', '') or ''} {c.title or ''}".lower()
+                    if any(k in text for k in keywords):
+                        if c.is_pass is False:
+                            return True
+                return False
+
+            show_continuity = _plate_needed("continuity")
+            show_doubler = _plate_needed("panel", "doubler")
+
+            try:
+                shapes = build_wufw_shapes(
+                    conn,
+                    show_continuity_plates=show_continuity,
+                    show_doubler_plate=show_doubler,
+                )
+                self._viewer.display_shapes(shapes.all_shapes())
+                self.log_info("WUF-W 3D model generated.")
+            except Exception as e3d:
+                self.log_info(f"3D: {e3d}", color="orange")
 
         except Exception as e:
             import traceback

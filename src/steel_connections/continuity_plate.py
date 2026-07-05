@@ -28,14 +28,16 @@ class ContinuityPlate(Plate):
         bolt_spacing (float): Spacing between bolts in mm.
         edge_distance (float): Edge distance for bolts in mm.
     """
-    connection: Connection
+    connection: Connection | None = None
     name: str = "Continuity Plate"
     description: str = "Continuity Plate for Steel Connections."
     e: float= np.inf
     
 
     def __post_init__(self):
-        super.__init__(self, )
+        super().__post_init__()
+        if self.connection is None:
+            raise ValueError("connection is required for ContinuityPlate")
         self.beam = self.connection.beam
         self.column = self.connection.column
 

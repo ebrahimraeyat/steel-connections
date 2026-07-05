@@ -66,8 +66,8 @@ class Plate():
         
         if self.sig_figs:
             for k, v in list(self.__dict__.items()):
-                if type(v) is float:
-                    setattr(self, k, round(v, self.sig_figs-int(floor(log10(abs(v))))-1) )    
+                if type(v) is float and math.isfinite(v) and v != 0.0:
+                    setattr(self, k, round(v, self.sig_figs-int(floor(log10(abs(v))))-1) )
     
     @property
     def I_p(self):

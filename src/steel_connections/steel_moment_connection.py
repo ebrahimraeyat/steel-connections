@@ -20,6 +20,11 @@ class SteelMomentConnection(Connection, ABC):
     units: str = "cm-kgf"
     checks: list[DesignCheckResult] = field(default_factory=list)
 
+    @property
+    def m_p(self) -> float:
+        """Plastic moment proxy used by continuity plate checks."""
+        return self.beam.geom.Z_x * self.beam.mat.f_y
+
     @abstractmethod
     def validate_geometry(self) -> list[DesignCheckResult]:
         """Validate prequalification limits and geometry constraints."""

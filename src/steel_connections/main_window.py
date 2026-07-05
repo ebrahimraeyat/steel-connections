@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from importlib.resources import files
 
-from PySide6.QtCore import QSettings, QFile, QTextStream, Qt, QTimer, QStandardPaths
+from PySide6.QtCore import QSettings, QFile, QTextStream, Qt, QTimer, QStandardPaths, Signal
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QApplication, QMessageBox, QMainWindow, QWidget,
@@ -90,9 +90,13 @@ class ResultRow(QWidget):
 # ── main window ───────────────────────────────────────────────────────────────
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    closed = Signal()
+
+    def __init__(self, connection_type: MomentConnectionType = MomentConnectionType.BFP):
         super().__init__()
-        self.setWindowTitle("Steel Connection Designer — BFP")
+        self._preset_connection_type = connection_type
+        title_suffix = "WUF-W" if connection_type == MomentConnectionType.WUFW else "BFP"
+        self.setWindowTitle(f"Steel Connection Designer — {title_suffix}")
         self.resize(1440, 840)
         self._current_path: str | None = None   # path of the open .scj file
         self._is_dirty: bool = False             # unsaved changes flag
@@ -109,6 +113,7 @@ class MainWindow(QMainWindow):
         self._fill_thickness()
         self._wire_signals()
         self._load_settings()
+        self._apply_preset_connection_type()
         self._on_code_changed()   # apply panel visibility for saved code
         QTimer.singleShot(0, self._finish_startup)
 
@@ -666,6 +671,17 @@ class MainWindow(QMainWindow):
         m10r_lay.addWidget(result_tabs)
         lay.addWidget(self._m10_results_widget)
 
+        # WUF-W results panel (visible only for WUF-W connection type)
+        self._wufw_results_widget = QWidget()
+        wufw_r_lay = QVBoxLayout(self._wufw_results_widget)
+        wufw_r_lay.setContentsMargins(0, 0, 0, 0)
+        wufw_r_lay.setSpacing(2)
+        wufw_r_lay.addWidget(_section_label("WUF-W Design Checks"))
+        self._wufw_results = QTextBrowser()
+        self._wufw_results.setMinimumHeight(200)
+        wufw_r_lay.addWidget(self._wufw_results)
+        lay.addWidget(self._wufw_results_widget)
+
         lay.addStretch()
         scroll.setWidget(inner)
         return scroll
@@ -731,6 +747,15 @@ class MainWindow(QMainWindow):
         """Public entry point — starts debounce timer (or fires immediately)."""
         self._debounce.start()
 
+    def _apply_preset_connection_type(self) -> None:
+        """Preset and lock the connection type chosen from the launcher."""
+        idx = self.connection_type_combo.findData(self._preset_connection_type)
+        if idx >= 0:
+            self.connection_type_combo.blockSignals(True)
+            self.connection_type_combo.setCurrentIndex(idx)
+            self.connection_type_combo.blockSignals(False)
+        self.connection_type_combo.setEnabled(False)
+
     def _on_code_changed(self):
         """Toggle input/result groups by selected connection type."""
         ctype = self.connection_type_combo.currentData()
@@ -738,6 +763,8 @@ class MainWindow(QMainWindow):
         self._mabhas10_group.setVisible(is_bfp)
         self._m10_results_widget.setVisible(is_bfp)
         self._wufw_group.setVisible(not is_bfp)
+        if hasattr(self, "_wufw_results_widget"):
+            self._wufw_results_widget.setVisible(not is_bfp)
 
     # ── settings ──────────────────────────────────────────────────────────────
 
@@ -756,6 +783,7 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
         self._save_app_settings()
+        self.closed.emit()
         super().closeEvent(event)
 
     def _load_settings(self):
@@ -990,6 +1018,8 @@ class MainWindow(QMainWindow):
                 else:
                     self.log_warning(f"{chk.title} ({chk.code_ref}) — pending detailed implementation")
 
+            self._render_wufw_results(result)
+
             cad_model = build_wufw_shapes(conn)
             if cad_model:
                 self.log_info("WUF-W preview skeleton generated.")
@@ -997,6 +1027,50 @@ class MainWindow(QMainWindow):
         except Exception as e:
             import traceback
             QMessageBox.critical(self, "WUF-W calculation error", f"{e}\n\n{traceback.format_exc()}")
+
+    def _render_wufw_results(self, result) -> None:
+        """Render WUF-W design checks into the right-hand results panel."""
+        if not hasattr(self, "_wufw_results"):
+            return
+
+        def _fmt(value):
+            if value is None:
+                return "—"
+            if isinstance(value, float):
+                return f"{value:.3g}"
+            return str(value)
+
+        overall = "OK" if result.is_ok else "NOT OK"
+        overall_color = "#2e7d32" if result.is_ok else "#c62828"
+        rows = [
+            "<table width='100%' cellspacing='0' cellpadding='4' style='font-size:11px;'>",
+            "<tr style='background:#33333322;font-weight:bold;'>"
+            "<td>Check</td><td>Ref</td><td align='right'>Demand</td>"
+            "<td align='right'>Capacity</td><td align='right'>Ratio</td><td align='center'>Status</td></tr>",
+        ]
+        for chk in result.checks:
+            if chk.is_pass is True:
+                status, color = "PASS", "#2e7d32"
+            elif chk.is_pass is False:
+                status, color = "FAIL", "#c62828"
+            else:
+                status, color = "N/A", "#f9a825"
+            rows.append(
+                "<tr>"
+                f"<td>{chk.title}</td>"
+                f"<td>{chk.code_ref or '—'}</td>"
+                f"<td align='right'>{_fmt(chk.demand)}</td>"
+                f"<td align='right'>{_fmt(chk.capacity)}</td>"
+                f"<td align='right'>{_fmt(chk.ratio)}</td>"
+                f"<td align='center' style='color:{color};font-weight:bold;'>{status}</td>"
+                "</tr>"
+            )
+        rows.append("</table>")
+        header = (
+            f"<p style='font-weight:bold;'>Overall: "
+            f"<span style='color:{overall_color};'>{overall}</span></p>"
+        )
+        self._wufw_results.setHtml(header + "".join(rows))
 
     def _do_calculate_mabhas10(self):
         """Run Mabhas10 BFP connection design and update UI."""
@@ -1326,8 +1400,9 @@ def toggle_stylesheet(dark: bool):
 def main():
     app = QApplication(sys.argv)
     toggle_stylesheet(False)
-    window = MainWindow()
-    window.show()
+    from steel_connections.gui.launcher import LauncherWindow
+    launcher = LauncherWindow()
+    launcher.show()
     app.exec()
 
 

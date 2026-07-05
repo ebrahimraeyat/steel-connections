@@ -151,64 +151,172 @@ class WUFWDesignCalculator:
         )
 
     def check_beam_design_shear_strength(self, connection) -> DesignCheckResult:
+        beam = connection.beam
+        aw = beam.geom.d * beam.geom.t_w
+        vn = 0.6 * beam.mat.f_y * aw
+        capacity = self.phi.phi_non_ductile * vn
+        demand = connection.vu
+        ratio = (demand / capacity) if capacity else None
         return DesignCheckResult(
             key="beam_shear_strength",
             title="Beam Shear Strength",
-            is_pass=None,
+            is_pass=(capacity >= demand),
+            demand=demand,
+            capacity=capacity,
+            ratio=ratio,
             code_ref="AISC 358-16 8.7",
-            message="TODO: implement required beam shear strength check.",
+            message=f"Aw={aw:.3f} cm2, phiVn={capacity:.3f} kgf",
         )
 
     def check_beam_flexure_compactness(self, connection) -> DesignCheckResult:
+        beam = connection.beam
+        e = beam.mat.E
+        fy = beam.mat.f_y
+        bf = beam.geom.b
+        tf = beam.geom.t_f
+        tw = beam.geom.t_w
+        d = beam.geom.d
+        h = max(d - 2.0 * tf, 0.0)
+
+        lam_f = self._check_ratio(bf, 2.0 * tf)
+        lam_w = self._check_ratio(h, tw)
+        lam_pf = 0.38 * sqrt(e / fy) if fy > 0 else None
+        lam_pw = 3.76 * sqrt(e / fy) if fy > 0 else None
+        compact = (
+            (lam_f is not None and lam_pf is not None and lam_f <= lam_pf)
+            and (lam_w is not None and lam_pw is not None and lam_w <= lam_pw)
+        )
+
+        z_x = beam.geom.Z_x
+        mn = fy * z_x if compact else 0.9 * fy * z_x
+        capacity = self.phi.phi_ductile * mn
+        demand = connection.mu
+        ratio = (demand / capacity) if capacity else None
+
         return DesignCheckResult(
             key="beam_flexure_compactness",
             title="Beam Flexural Strength and Compactness",
-            is_pass=None,
+            is_pass=(capacity >= demand),
+            demand=demand,
+            capacity=capacity,
+            ratio=ratio,
             code_ref="AISC 360-16 Chapter F",
-            message="TODO: compact/non-compact flexural branch.",
+            message=(
+                "compact="
+                f"{compact}, lambda_f={f'{lam_f:.3f}' if lam_f is not None else 'n/a'}, "
+                f"lambda_w={f'{lam_w:.3f}' if lam_w is not None else 'n/a'}"
+            ),
         )
 
     def check_cjp_flange_weld_strength(self, connection) -> DesignCheckResult:
+        beam = connection.beam
+        af = beam.geom.b * beam.geom.t_f
+        demand = beam.mat.f_u * af
+        capacity = self.phi.phi_cjp * connection.cjp_electrode_fexx * af
+        ratio = (demand / capacity) if capacity else None
         return DesignCheckResult(
             key="cjp_flange_weld",
             title="Flange CJP Weld Strength",
-            is_pass=None,
+            is_pass=(capacity >= demand),
+            demand=demand,
+            capacity=capacity,
+            ratio=ratio,
             code_ref="AISC 358-16 8.5",
-            message="TODO: use phi = 0.9 for CJP welds.",
+            message="CJP weld check uses phi = 0.9.",
         )
 
     def check_web_connection_strength(self, connection) -> DesignCheckResult:
+        hp = connection.shear_plate_height
+        bp = connection.shear_plate_width
+        tp = connection.shear_plate_thickness
+        weld_size = connection.web_fillet_weld_size
+
+        weld_length = max(2.0 * hp + bp, 0.0)
+        throat = 0.707 * weld_size
+        weld_capacity = self.phi.phi_non_ductile * 0.6 * connection.cjp_electrode_fexx * throat * weld_length
+
+        fy_plate = connection.material_defaults.fy_plate
+        plate_shear_capacity = self.phi.phi_non_ductile * 0.6 * fy_plate * hp * tp
+
+        capacity = min(weld_capacity, plate_shear_capacity)
+        demand = connection.vu
+        ratio = (demand / capacity) if capacity else None
+
         return DesignCheckResult(
             key="web_connection_strength",
             title="Beam Web to Column Connection Strength",
-            is_pass=None,
+            is_pass=(capacity >= demand),
+            demand=demand,
+            capacity=capacity,
+            ratio=ratio,
             code_ref="AISC 358-16 8.6 / 8.7",
-            message="TODO: shear-plate weld and plate shear chain.",
+            message=(
+                f"weld_capacity={weld_capacity:.3f} kgf, "
+                f"plate_capacity={plate_shear_capacity:.3f} kgf"
+            ),
         )
 
     def check_moment_at_connection_face(self, connection) -> DesignCheckResult:
+        mp = connection.beam.mat.f_y * connection.beam.geom.Z_x
+        arm = (connection.beam.geom.d / 2.0) - connection.shear_plate_thickness
+        mf = mp + connection.vu * arm
+        demand = connection.mu
+        ratio = (demand / mf) if mf else None
         return DesignCheckResult(
             key="moment_at_face",
             title="Moment at Connection Face",
-            is_pass=None,
+            is_pass=(mf >= demand),
+            demand=demand,
+            capacity=mf,
+            ratio=ratio,
             code_ref="AISC 358-16 8.7",
-            message="TODO: Mf = Mp + Vu * (db/2 - tp).",
+            message=f"Mf=Mp+Vu*(db/2-tp), arm={arm:.3f} cm",
         )
 
     def check_protected_zone_restrictions(self, connection) -> DesignCheckResult:
+        sec_type = str(connection.beam.geom.sec_type).upper()
+        rolled_w = sec_type.startswith("W")
+        if rolled_w:
+            is_pass = True
+            note = "Rolled W-shape treated as standard mill-practice compliant."
+        else:
+            is_pass = connection.web_fillet_weld_size >= 0.8
+            note = "Built-up section requires >= 0.8 cm reinforcing fillet weld in protected zone."
+
         return DesignCheckResult(
             key="protected_zone",
             title="Protected Zone Detailing",
-            is_pass=None,
+            is_pass=is_pass,
             code_ref="AISC 358-16 2.3.2a",
-            message="TODO: enforce protected-zone weld restrictions.",
+            message=note,
         )
 
     def check_ltb_and_local_buckling(self, connection) -> DesignCheckResult:
+        beam = connection.beam
+        e = beam.mat.E
+        fy = beam.mat.f_y
+        bf = beam.geom.b
+        tf = beam.geom.t_f
+        tw = beam.geom.t_w
+        d = beam.geom.d
+        h = max(d - 2.0 * tf, 0.0)
+
+        lam_f = self._check_ratio(bf, 2.0 * tf)
+        lam_w = self._check_ratio(h, tw)
+        lam_pf = 0.38 * sqrt(e / fy) if fy > 0 else None
+        lam_pw = 3.76 * sqrt(e / fy) if fy > 0 else None
+        local_ok = (
+            (lam_f is not None and lam_pf is not None and lam_f <= lam_pf)
+            and (lam_w is not None and lam_pw is not None and lam_w <= lam_pw)
+        )
+
+        # Placeholder LTB adequacy, pending explicit unbraced-length input.
+        ltb_ok = True
+
         return DesignCheckResult(
             key="ltb_local_buckling",
             title="LTB and Local Buckling",
-            is_pass=None,
+            is_pass=(local_ok and ltb_ok),
             code_ref="AISC 360-16 F2/F3 and AISC 341-16 D1.2a",
-            message="TODO: implement buckling controls.",
+            message="Local buckling limits checked. LTB placeholder assumes bracing adequacy.",
         )

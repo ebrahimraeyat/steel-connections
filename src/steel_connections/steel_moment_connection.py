@@ -5,9 +5,7 @@ from dataclasses import dataclass, field
 
 from steel_connections.connection_types import FrameSystem
 from steel_connections.connections import Connection
-from steel_connections.continuity_plate import ContinuityPlate
 from steel_connections.design_result import ConnectionDesignResult, DesignCheckResult
-from steel_connections.doubler_plate import DoublerPlate
 from steel_connections.member.member import SteelSection
 
 
@@ -56,6 +54,8 @@ class SteelMomentConnection(Connection, ABC):
 
     def check_continuity_plates(self) -> DesignCheckResult:
         """Route continuity plate requirement through existing project class."""
+        from steel_connections.continuity_plate import ContinuityPlate
+
         continuity = ContinuityPlate(connection=self)
         required = continuity.check_is_required_continuity_plate()
         result = DesignCheckResult(
@@ -70,6 +70,8 @@ class SteelMomentConnection(Connection, ABC):
 
     def check_panel_zone(self, vu_panel: float) -> DesignCheckResult:
         """Route panel zone demand through existing doubler plate class."""
+        from steel_connections.doubler_plate import DoublerPlate
+
         doubler = DoublerPlate(
             left_beam=self.beam,
             right_beam=self.beam,
